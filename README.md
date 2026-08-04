@@ -12,7 +12,7 @@
 
 <br/>
 
-## 🌐 Live Demo
+## 🌐 Live Demo of Render site
 
 **[pyqportal.app](https://pyqportal.app)** — Open. Free. No login required to browse.
 
