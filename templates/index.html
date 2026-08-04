@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NFFDSV2NF7"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+        gtag('config', 'G-NFFDSV2NF7');
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PYQ Portal - Previous Year Question Papers</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+</head>
+
+<body>
+    <!-- ==================== HEADER ==================== -->
+    <header class="main-header">
+        <div class="container-fluid">
+            <div class="unified-header">
+                <!-- Left: College Branding -->
+                <div class="college-brand">
+                    <img src="{{ url_for('static', filename='mcsc_logo.webp') }}"
+                        alt="MCSC Marian College Students Council" class="college-logo">
+                </div>
+
+                <!-- Center: Portal Branding -->
+                <div class="portal-brand">
+                    <div class="portal-logo">
+                        <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="lgMark" x1="0" y1="0" x2="40" y2="40"
+                                    gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="#3B82F6" />
+                                    <stop offset="100%" stop-color="#8B5CF6" />
+                                </linearGradient>
+                            </defs>
+                            <path d="M20 10 C14 10 8 12 8 14 L8 30 C8 30 14 28 20 30 Z" fill="url(#lgMark)"
+                                opacity="0.9" />
+                            <path d="M20 10 C26 10 32 12 32 14 L32 30 C32 30 26 28 20 30 Z" fill="url(#lgMark)"
+                                opacity="0.6" />
+                            <line x1="20" y1="10" x2="20" y2="30" stroke="white" stroke-width="1.5"
+                                stroke-linecap="round" opacity="0.8" />
+                            <circle cx="32" cy="10" r="3" fill="#F59E0B" />
+                            <path
+                                d="M32 8.2 L32.5 9.5 L34 9.5 L32.8 10.4 L33.2 11.8 L32 11 L30.8 11.8 L31.2 10.4 L30 9.5 L31.5 9.5 Z"
+                                fill="white" opacity="0.9" />
+                        </svg>
+                    </div>
+                    <div class="portal-text">
+                        <h1 class="portal-title">PYQ Portal</h1>
+                        <p class="portal-subtitle">Previous Year Question Papers</p>
+                    </div>
+                </div>
+
+                <!-- Right: Navigation & Actions -->
+                <div class="header-actions">
+                    <nav class="main-nav">
+                        <ul class="nav-list">
+                            <li><a href="{{ url_for('home') }}" class="nav-link active">Home</a></li>
+                            <li><a href="{{ url_for('view_papers') }}" class="nav-link">Browse</a></li>
+                            <li><a href="{{ url_for('user_upload') }}" class="nav-link">Upload Paper</a></li>
+                            {% if session.get('role') == 'admin' %}
+                            <li><a href="{{ url_for('upload_page') }}" class="nav-link">Upload</a></li>
+                            {% endif %}
+                            <li><a href="{{ url_for('about') }}" class="nav-link">About</a></li>
+                        </ul>
+                    </nav>
+                    <div class="header-user">
+                        <button class="icon-btn" onclick="openPopup('help')" title="Help">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                        </button>
+
+                        {% if session.get('user_id') %}
+                        <div class="user-menu desktop-only">
+                            <span class="user-name">{{ session.username }}</span>
+                            <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+                        </div>
+                        {% else %}
+                        <a href="{{ url_for('login') }}" class="btn-login desktop-only">Login</a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Mobile Menu Toggle -->
+                <button class="mobile-menu-toggle" id="mobileMenuToggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+
+            <!-- Mobile Navigation -->
+            <div class="mobile-nav" id="mobileNav">
+                <nav>
+                    <a href="{{ url_for('home') }}" class="mobile-nav-link">Home</a>
+                    <a href="{{ url_for('view_papers') }}" class="mobile-nav-link">Browse Papers</a>
+                    <a href="{{ url_for('user_upload') }}" class="mobile-nav-link">Upload Paper</a>
+                    {% if session.get('role') == 'admin' %}
+                    <a href="{{ url_for('upload_page') }}" class="mobile-nav-link">Upload</a>
+                    {% endif %}
+                    <a href="{{ url_for('about') }}" class="mobile-nav-link">About</a>
+                    <hr class="mobile-nav-divider">
+                    <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
+                    {% if session.get('user_id') %}
+                    <hr class="mobile-nav-divider">
+                    <span class="mobile-nav-user">{{ session.username }}</span>
+                    <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
+                    {% else %}
+                    <hr class="mobile-nav-divider">
+                    <a href="{{ url_for('login') }}" class="mobile-nav-link mobile-nav-login">Login</a>
+                    {% endif %}
+                </nav>
+            </div>
+        </div>
+    </header>
+    <!-- ==================== HERO SECTION ==================== -->
+    <section class="hero-section">
+        <div class="hero-background"></div>
+        <div class="hero-grid"></div>
+        <div class="hero-orb hero-orb-1"></div>
+        <div class="hero-orb hero-orb-2"></div>
+        <div class="hero-orb hero-orb-3"></div>
+
+        <div class="floating-papers">
+            <div class="floating-paper"></div>
+            <div class="floating-paper"></div>
+            <div class="floating-paper"></div>
+            <div class="floating-paper"></div>
+        </div>
+
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-badge">
+                    <span class="badge-text">Marian College Students Council
+                    </span>
+                </div>
+
+                <h1 class="hero-title">
+                    Access Previous Year<br>
+                    <span class="gradient-text">Question Papers</span>
+                </h1>
+
+                <p class="hero-description">
+                    Your comprehensive academic resource for exam preparation. Browse, download,
+                    and contribute to our growing collection of previous year question papers
+                    across all departments and subjects.
+                </p>
+
+                <div class="hero-cta">
+                    <a href="{{ url_for('view_papers') }}" class="btn btn-primary btn-large btn-primary-pulse">
+                        <span>Browse Papers</span>
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                            <path d="M4 10h12m-6-6l6 6-6 6" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </a>
+                    {% if session.get('role') == 'admin' %}
+                    <a href="{{ url_for('upload_page') }}" class="btn btn-secondary btn-large">
+                        <span>Upload Papers</span>
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('about') }}" class="btn btn-secondary btn-large">
+                        <span>Learn More</span>
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- data-count passes paper count to indexjs.js without any inline script -->
+                <div class="hero-stats" data-count="{{ paper_count|default(0) }}">
+                    <div class="stat-item">
+                        <div class="stat-number" id="statPapers">{{ paper_count|default(0) }}+</div>
+                        <div class="stat-label">Question Papers</div>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <div class="stat-number">24/7</div>
+                        <div class="stat-label">Available</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <!-- ==================== ANNOUNCEMENT BANNER ==================== -->
+    <div class="announcement-banner" id="announcementBanner">
+        <span>🎓 New papers elm loading makkaleee... <br>
+            puthye sem nammk tookkam...😎✌️</span>
+        <button onclick="document.getElementById('announcementBanner').style.display='none'">✕</button>
+    </div>
+    <!-- ==================== DEPARTMENTS SECTION ==================== -->
+    <section class="departments-section">
+        <div class="container">
+            <div class="section-header reveal">
+                <span class="section-tag">Departments</span>
+                <h2 class="section-title">Browse by Department</h2>
+                <p class="section-subtitle">Quick access to department-specific question papers</p>
+            </div>
+
+            <div class="departments-grid">
+                {% for dept in departments %}
+                {% if dept.is_coming_soon or dept.paper_count == 0 %}
+                <div class="dept-card dept-coming-soon reveal">
+                    <span class="dept-icon">{{ dept.icon }}</span>
+                    <h3 class="dept-name">{{ dept.name }}</h3>
+                    <p class="dept-soon-badge">Coming Soon</p>
+                </div>
+                {% else %}
+                <a href="{{ url_for('view_papers_by_department', department=dept.slug) }}" class="dept-card reveal">
+                    <span class="dept-icon">{{ dept.icon }}</span>
+                    <h3 class="dept-name">{{ dept.name }}</h3>
+                    <p class="dept-count">{{ dept.paper_count }} Paper{% if dept.paper_count != 1 %}s{% endif %}</p>
+                </a>
+                {% endif %}
+                {% endfor %}
+            </div>
+
+            <p class="dept-more-note reveal">More departments being added soon — stay tuned! 🚀</p>
+        </div>
+    </section>
+
+
+
+
+    <!-- ==================== CONTRIBUTE SECTION ==================== -->
+    <!-- INSERT THIS BLOCK right after </section> of the departments-section -->
+    <!-- ==================== CONTRIBUTE SECTION ==================== -->
+    <!-- INSERT THIS BLOCK right after </section> of the departments-section -->
+
+    <style>
+        .contrib-inner {
+            max-width: 860px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 2.5rem;
+            background: #fff;
+            border: 1px solid rgba(99, 102, 241, .15);
+            border-radius: 20px;
+            padding: 2.5rem 3rem;
+            box-shadow: 0 4px 24px rgba(99, 102, 241, .08), 0 1px 4px rgba(0, 0, 0, .04);
+        }
+
+        .contrib-cta-wrap {
+            flex-shrink: 0;
+            text-align: center;
+        }
+
+        .contrib-cta-btn {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            gap: .5rem;
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: white;
+            border-radius: 16px;
+            padding: 1.5rem 2rem;
+            text-decoration: none;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            font-size: 1rem;
+            box-shadow: 0 8px 24px rgba(99, 102, 241, .35);
+            transition: transform .2s, box-shadow .2s;
+            min-width: 140px;
+        }
+
+        .contrib-cta-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(99, 102, 241, .45);
+        }
+
+        @media (max-width: 600px) {
+            .contrib-inner {
+                grid-template-columns: 1fr;
+                padding: 1.75rem 1.5rem;
+                gap: 1.75rem;
+                text-align: center;
+            }
+
+            .contrib-inner p {
+                margin: 0 auto;
+            }
+
+            .contrib-pills {
+                justify-content: center;
+            }
+
+            .contrib-cta-wrap {
+                width: 100%;
+            }
+
+            .contrib-cta-btn {
+                width: 100%;
+                max-width: 280px;
+            }
+        }
+    </style>
+
+    <section style="
+        padding: 4rem 0;
+        background: linear-gradient(135deg, #f0f4ff 0%, #f5f0ff 100%);
+        position: relative;
+        overflow: hidden;
+    ">
+        <div
+            style="position:absolute;top:-60px;right:-60px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(99,102,241,.12) 0%,transparent 70%);pointer-events:none;">
+        </div>
+        <div
+            style="position:absolute;bottom:-40px;left:-40px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(139,92,246,.1) 0%,transparent 70%);pointer-events:none;">
+        </div>
+
+        <div class="container">
+            <div class="contrib-inner reveal">
+
+                <!-- Left text -->
+                <div>
+                    <div
+                        style="display:inline-flex;align-items:center;gap:.45rem;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.18);border-radius:999px;padding:.3rem .9rem;font-size:.78rem;font-weight:700;color:#4f46e5;letter-spacing:.05em;text-transform:uppercase;margin-bottom:1rem;">
+                        Community Contribution
+                    </div>
+
+                    <h2
+                        style="font-family:'Space Grotesk',sans-serif;font-size:1.6rem;font-weight:700;color:#111827;line-height:1.3;margin-bottom:.65rem;">
+                        Have a question paper?
+                        <span
+                            style="background:linear-gradient(135deg,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Share
+                            it!</span>
+                    </h2>
+
+                    <p style="color:#6b7280;font-size:.975rem;line-height:1.65;max-width:460px;margin:0;">
+                        Help your classmates prepare better. Submit any previous year paper you have —
+                        our team will review and publish it to the portal for everyone.
+                    </p>
+
+                    <div class="contrib-pills" style="display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1.25rem;">
+                        <span
+                            style="display:inline-flex;align-items:center;gap:.35rem;background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;border-radius:999px;padding:.25rem .75rem;font-size:.78rem;font-weight:600;">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="3">
+                                <polyline points="20,6 9,17 4,12" />
+                            </svg>
+                            Reviewed before publishing
+                        </span>
+                        <span
+                            style="display:inline-flex;align-items:center;gap:.35rem;background:#eff6ff;border:1px solid #bfdbfe;color:#2563eb;border-radius:999px;padding:.25rem .75rem;font-size:.78rem;font-weight:600;">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="3">
+                                <polyline points="20,6 9,17 4,12" />
+                            </svg>
+                            PDF only · No login needed
+                        </span>
+
+                    </div>
+                </div>
+
+                <!-- Right CTA -->
+                <div class="contrib-cta-wrap">
+                    <a href="{{ url_for('user_upload') }}" class="contrib-cta-btn">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17,8 12,3 7,8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                        Submit a Paper
+                    </a>
+                    <p style="margin-top:.75rem;font-size:.75rem;color:#9ca3af;line-height:1.4;">
+                        Up to 5 submissions<br>per hour
+                    </p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+    <!-- ==================== END CONTRIBUTE SECTION ==================== -->
+
+    <!-- ==================== END CONTRIBUTE SECTION ==================== -->
+
+    <!-- ==================== CTA SECTION ==================== -->
+    <section class="cta-section" style="padding: 2.25rem 0 !important; background: linear-gradient(135deg, var(--primary-blue, #2563eb) 0%, var(--primary-purple, #7c3aed) 100%);">
+        <div class="container">
+            <div class="cta-content reveal" style="display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap;">
+                
+                <!-- Left Title -->
+                <div style="flex: 1; min-width: 240px;">
+                    <span style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #bfdbfe; display: block; margin-bottom: 0.25rem;">
+                        PYQ Portal
+                    </span>
+                    <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 1.65rem; font-weight: 800; color: #ffffff; margin: 0; line-height: 1.25;">
+                        Exam season?<br><span style="color: #fef08a;">We got you...!</span>
+                    </h2>
+                </div>
+
+                <!-- Right Points Badges / Grid -->
+                <div style="flex: 2; min-width: 300px; display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center;">
+                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
+                        📄 Previous year question papers
+                    </span>
+                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
+                        🎓 All semesters covered
+                    </span>
+                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
+                        📝 SEA I, SEA II, ISA papers
+                    </span>
+                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
+                        🔓 No login needed
+                    </span>
+                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(99,102,241,0.22); border: 1px solid rgba(165,180,252,0.35); color: #ffffff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 700;">
+                        ✨ AI-powered question analysis
+                    </span>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="mini-footer">
+        <div class="container">
+            <div class="mini-footer-inner">
+                <div class="mini-footer-brand">
+                    <div class="mini-footer-logo">
+                        <svg width="22" height="22" viewBox="0 0 40 40" fill="none">
+                            <defs>
+                                <linearGradient id="fgMark" x1="0" y1="0" x2="40" y2="40"
+                                    gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="#3B82F6" />
+                                    <stop offset="100%" stop-color="#8B5CF6" />
+                                </linearGradient>
+                            </defs>
+                            <path d="M20 10 C14 10 8 12 8 14 L8 30 C8 30 14 28 20 30 Z" fill="url(#fgMark)"
+                                opacity="0.9" />
+                            <path d="M20 10 C26 10 32 12 32 14 L32 30 C32 30 26 28 20 30 Z" fill="url(#fgMark)"
+                                opacity="0.6" />
+                            <line x1="20" y1="10" x2="20" y2="30" stroke="white" stroke-width="1.5"
+                                stroke-linecap="round" opacity="0.8" />
+                            <circle cx="32" cy="10" r="2.5" fill="#F59E0B" />
+                        </svg>
+                    </div>
+                    <span class="mini-footer-name">PYQ Portal</span>
+                    <span class="mini-footer-sep">·</span>
+                    <span class="mini-footer-copy">© 2026 Marian College Students Council</span>
+                </div>
+                <nav class="mini-footer-nav">
+                    <a href="{{ url_for('view_papers') }}" class="mini-footer-link">Browse</a>
+                    <a href="{{ url_for('about') }}" class="mini-footer-link">About</a>
+                    <button class="mini-footer-link" onclick="openPopup('help')">Help</button>
+                </nav>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ==================== POPUP ==================== -->
+    <div class="popup-overlay" id="popupOverlay" onclick="closePopup()">
+        <div class="popup-card" id="popupCard" onclick="event.stopPropagation()">
+            <div class="popup-header-band"></div>
+            <div class="popup-body">
+                <button class="popup-close" onclick="closePopup()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+                <div class="popup-icon" id="popupIcon"></div>
+                <h3 class="popup-title" id="popupTitle"></h3>
+                <p class="popup-desc" id="popupDesc"></p>
+                <a class="popup-mail-btn" id="popupMailBtn" href="mailto:pyqportalhelp@gmail.com">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                        <polyline points="22,6 12,13 2,6" />
+                    </svg>
+                    <span id="popupMailLabel">pyqportalhelp@gmail.com</span>
+                </a>
+                <p class="popup-tagline">We usually respond within 24 hours</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="{{ url_for('static', filename='indexjs.js') }}"></script>
+</body>
+
+</html>

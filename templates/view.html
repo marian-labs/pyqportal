@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <title>{{ department_name }} Papers - PYQ Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+</head>
+<body>
+
+    <!-- ==================== HEADER ==================== -->
+<header class="main-header">
+    <div class="container-fluid">
+        <div class="unified-header">
+            <!-- Left: College Branding -->
+            <div class="college-brand">
+                <img src="{{ url_for('static', filename='mcsc_logo.webp') }}" 
+                     alt="MCSC Marian College Students Council" 
+                     class="college-logo">
+            </div>
+
+            <!-- Center: Portal Branding -->
+            <div class="portal-brand">
+                <div class="portal-logo">
+                    <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="lgMark" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                                <stop offset="0%" stop-color="#3B82F6"/>
+                                <stop offset="100%" stop-color="#8B5CF6"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M20 10 C14 10 8 12 8 14 L8 30 C8 30 14 28 20 30 Z" fill="url(#lgMark)" opacity="0.9"/>
+                        <path d="M20 10 C26 10 32 12 32 14 L32 30 C32 30 26 28 20 30 Z" fill="url(#lgMark)" opacity="0.6"/>
+                        <line x1="20" y1="10" x2="20" y2="30" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+                        <circle cx="32" cy="10" r="3" fill="#F59E0B"/>
+                        <path d="M32 8.2 L32.5 9.5 L34 9.5 L32.8 10.4 L33.2 11.8 L32 11 L30.8 11.8 L31.2 10.4 L30 9.5 L31.5 9.5 Z" fill="white" opacity="0.9"/>
+                    </svg>
+                </div>
+                <div class="portal-text">
+                    <h1 class="portal-title">PYQ Portal</h1>
+                    <p class="portal-subtitle">Previous Year Question Papers</p>
+                </div>
+            </div>
+
+            <!-- Right: Navigation & Actions -->
+            <div class="header-actions">
+                <nav class="main-nav">
+                        <ul class="nav-list">
+                            <li><a href="{{ url_for('home') }}" class="nav-link">Home</a></li>
+                            <li><a href="{{ url_for('view_papers_by_department', department=department_slug) }}" class="nav-link active">Browse</a></li>
+                            <li><a href="{{ url_for('user_upload') }}" class="nav-link">Upload Paper</a></li>
+                            {% if session.get('role') == 'admin' %}
+                            <li><a href="{{ url_for('upload_page') }}" class="nav-link">Upload</a></li>
+                            {% endif %}
+                            <li><a href="{{ url_for('about') }}" class="nav-link">About</a></li>
+                        </ul>
+                </nav>
+                <div class="header-user">
+                    <button class="icon-btn" onclick="openPopup('help')" title="Help">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                    </button>
+
+                    {% if session.get('user_id') %}
+                    <div class="user-menu desktop-only">
+                        <span class="user-name">{{ session.username }}</span>
+                        <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+                    </div>
+                    {% else %}
+                    <a href="{{ url_for('login') }}" class="btn-login desktop-only">Login</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Mobile Menu Toggle -->
+            <button class="mobile-menu-toggle" id="mobileMenuToggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+
+        <!-- Mobile Navigation -->
+        <div class="mobile-nav" id="mobileNav">
+            <nav>
+                <a href="{{ url_for('home') }}" class="mobile-nav-link">Home</a>
+                <a href="{{ url_for('view_papers_by_department', department=department_slug) }}" class="mobile-nav-link active">Browse Papers</a>
+                <a href="{{ url_for('user_upload') }}" class="mobile-nav-link">Upload Paper</a>
+                {% if session.get('role') == 'admin' %}
+                <a href="{{ url_for('upload_page') }}" class="mobile-nav-link">Upload</a>
+                {% endif %}
+                <a href="{{ url_for('about') }}" class="mobile-nav-link">About</a>
+                <hr class="mobile-nav-divider">
+                <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
+                {% if session.get('user_id') %}
+                <hr class="mobile-nav-divider">
+                <span class="mobile-nav-user">{{ session.username }}</span>
+                <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
+                {% else %}
+                <hr class="mobile-nav-divider">
+                <a href="{{ url_for('login') }}" class="mobile-nav-link mobile-nav-login">Login</a>
+                {% endif %}
+            </nav>
+        </div>
+    </div>
+</header>
+
+    <!-- ==================== PAGE HEADER ==================== -->
+    <section class="page-header">
+        <div class="container">
+            <div class="breadcrumb">
+                <a href="{{ url_for('home') }}">Home</a>
+                <span class="breadcrumb-separator">/</span>
+                <a href="{{ url_for('view_papers') }}">Papers</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-current">{{ department_name }}</span>
+            </div>
+
+            <!-- Title left · Search right -->
+            <div class="page-header-top">
+                <div class="page-header-left">
+                    <h1 class="page-title">{{ department_name }} Question Papers</h1>
+                    <p class="page-description">
+                        Browse previous year question papers for {{ department_name }}
+                    </p>
+                    {% if departments|length > 1 %}
+                    <div class="dept-switcher" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.85rem;">
+                        {% for slug, name in departments.items() %}
+                        <a href="{{ url_for('view_papers_by_department', department=slug) }}"
+                           class="btn btn-secondary{% if slug == department_slug %} active{% endif %}"
+                           style="padding:0.35rem 0.85rem; font-size:0.85rem;{% if slug == department_slug %} opacity:1; font-weight:600;{% endif %}">
+                            {{ name }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Search + chips on the right -->
+                <div class="search-hero-wrap">
+                    <div class="search-hero-box" id="searchHeroBox">
+                        <svg class="search-hero-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        <input type="text" id="unifiedSearch" class="search-hero-input"
+                               placeholder="Search by subject, exam type, year…"
+                               aria-label="Search papers by subject, exam type, or year"
+                               autocomplete="off">
+                        <button class="search-hero-clear" id="searchClearBtn" title="Clear search" style="display:none;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="search-chips">
+                        <span class="search-chip-label">Try:</span>
+                        <button class="search-chip" onclick="setSearch('SEA I')">SEA I</button>
+                        <button class="search-chip" onclick="setSearch('SEA II')">SEA II</button>
+                        <button class="search-chip" onclick="setSearch('ISA')">ISA</button>
+                        <button class="search-chip" onclick="setSearch('{{ department_name.split()[0] }}')">{{ department_name.split()[0] }}</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+
+
+
+
+
+<!-- Hidden semester value — set by folder navigation, not shown to user -->
+<input type="hidden" id="semesterFilter" value="">
+
+    <!-- ==================== RESULTS SECTION ==================== -->
+    <!-- ==================== RESULTS SECTION ==================== -->
+<section class="results-section">
+    <div class="container">
+        <div class="results-header" id="resultsHeader" style="display:none;">
+            <h3 class="results-count" id="resultsCount">Showing 0 papers</h3>
+            <div class="view-toggle">
+                <button class="view-btn active" data-view="grid">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                </button>
+                <button class="view-btn" data-view="list">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <line x1="8" y1="6" x2="21" y2="6"></line>
+                        <line x1="8" y1="12" x2="21" y2="12"></line>
+                        <line x1="8" y1="18" x2="21" y2="18"></line>
+                        <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                        <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                        <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Semester folder view -->
+        <div class="sem-folders" id="semFolders"></div>
+
+        <!-- Papers inside folder -->
+        <div class="folder-papers-view" id="folderPapersView" style="display:none;">
+            <button class="btn-back-folders" id="btnBackFolders">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                Back
+            </button>
+            <!-- Floating back button for mobile scroll -->
+<button class="btn-back-float" id="btnBackFloat">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 18 9 12 15 6"></polyline>
+    </svg>
+    Back
+</button>
+            <div class="folder-papers-header" id="folderPapersHeader"></div>
+            <div class="papers-grid" id="papersGrid"></div>
+            <div class="no-results" id="noResults" style="display:none;">
+                <div class="no-results-icon">🔍</div>
+                <h3>No papers found</h3>
+                <p>Try adjusting your search terms</p>
+                <button class="btn btn-primary"
+                        onclick="const s=document.getElementById('unifiedSearch'); if(s){s.value=''; s.dispatchEvent(new Event('input'));}">
+                    Clear search
+                </button>
+            </div>
+        </div>
+
+    </div>
+</section>
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="mini-footer">
+        <div class="container">
+            <div class="mini-footer-inner">
+                <div class="mini-footer-brand">
+                    <div class="mini-footer-logo">
+                        <svg width="22" height="22" viewBox="0 0 40 40" fill="none">
+                            <defs>
+                                <linearGradient id="fgMark" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="#3B82F6"/>
+                                    <stop offset="100%" stop-color="#8B5CF6"/>
+                                </linearGradient>
+                            </defs>
+                            <path d="M20 10 C14 10 8 12 8 14 L8 30 C8 30 14 28 20 30 Z" fill="url(#fgMark)" opacity="0.9"/>
+                            <path d="M20 10 C26 10 32 12 32 14 L32 30 C32 30 26 28 20 30 Z" fill="url(#fgMark)" opacity="0.6"/>
+                            <line x1="20" y1="10" x2="20" y2="30" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+                            <circle cx="32" cy="10" r="2.5" fill="#F59E0B"/>
+                        </svg>
+                    </div>
+                    <span class="mini-footer-name">PYQ Portal</span>
+                    <span class="mini-footer-sep">·</span>
+                    <span class="mini-footer-copy">© 2026 Marian College Students Council</span>
+                </div>
+                <nav class="mini-footer-nav">
+                    <a href="{{ url_for('view_papers_by_department', department=department_slug) }}" class="mini-footer-link">Browse</a>
+                    <a href="{{ url_for('about') }}"       class="mini-footer-link">About</a>
+                    <button class="mini-footer-link" onclick="openPopup('help')">Help</button>
+                </nav>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ==================== POPUP ==================== -->
+    <div class="popup-overlay" id="popupOverlay" onclick="closePopup()">
+        <div class="popup-card" onclick="event.stopPropagation()">
+            <div class="popup-header-band"></div>
+            <div class="popup-body">
+                <button class="popup-close" onclick="closePopup()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+                <div class="popup-icon" id="popupIcon"></div>
+                <h3 class="popup-title" id="popupTitle"></h3>
+                <p class="popup-desc" id="popupDesc"></p>
+                <a class="popup-mail-btn" id="popupMailBtn" href="mailto:pyqportalhelp@gmail.com">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                        <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    <span id="popupMailLabel">pyqportalhelp@gmail.com</span>
+                </a>
+                <p class="popup-tagline">We usually respond within 24 hours</p>
+            </div>
+        </div>
+    </div>
+    <!-- ===== ANALYSE MODAL ===== -->
+<div id="analyseModal" style="display:none; position:fixed; inset:0; background:rgba(8,8,20,0.7);
+     backdrop-filter:blur(10px); z-index:9999; align-items:center; justify-content:center; padding:1rem;">
+    <div style="background:white; border-radius:20px; max-width:640px; width:100%;
+                max-height:85vh; display:flex; flex-direction:column; overflow:hidden;
+                box-shadow: 0 32px 80px rgba(0,0,0,0.25);">
+        <div style="height:5px; background:linear-gradient(90deg,#3B82F6,#8B5CF6);"></div>
+        <div style="padding:1.5rem 1.75rem; border-bottom:1px solid #E5E7EB;
+                    display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-size:0.75rem; font-weight:700; letter-spacing:0.08em;
+                            color:#8B5CF6; text-transform:uppercase; margin-bottom:0.25rem;">
+                    🤖 AI Prediction
+                </div>
+                <div id="analyseSubject" style="font-weight:700; color:#111827; font-size:1rem;"></div>
+            </div>
+            <button id="copyBtn" onclick="copyAnalysis()"
+                style="background:#F3F4F6; border:none; border-radius:8px; padding:6px 14px;
+               cursor:pointer; font-size:0.8rem; font-weight:600; color:#6B7280;
+               display:flex; align-items:center; gap:6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                     </svg>
+                    Copy
+            </button>
+            <button onclick="closeAnalyseModal()"
+                    style="background:#F3F4F6; border:none; border-radius:50%; width:32px; height:32px;
+                           cursor:pointer; font-size:1.1rem; display:flex; align-items:center;
+                           justify-content:center; color:#6B7280;">✕</button>
+        </div>
+        <div style="padding:1.5rem 1.75rem; overflow-y:auto; flex:1;">
+            <div id="analyseResult" style="font-family:'Plus Jakarta Sans',sans-serif;
+     font-size:0.9rem; line-height:1.75; color:#374151;"></div>
+        </div>
+    </div>
+</div>
+    <script>
+        window.PAPERS_FROM_BACKEND = {{ (papers | default([])) | tojson }};
+        window.CURRENT_DEPARTMENT = {{ department_slug | tojson }};
+    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="{{ url_for('static', filename='viewjs.js') }}"></script>
+</body>
+</html>

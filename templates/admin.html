@@ -1,0 +1,1879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel — PYQ Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --primary-blue: #2563EB;
+            --primary-purple: #7C3AED;
+            --primary-dark: #1E40AF;
+            --accent-green: #10B981;
+            --accent-orange: #F59E0B;
+            --accent-red: #EF4444;
+            --accent-cyan: #06B6D4;
+            --gray-50: #F9FAFB;
+            --gray-100: #F3F4F6;
+            --gray-200: #E5E7EB;
+            --gray-300: #D1D5DB;
+            --gray-400: #9CA3AF;
+            --gray-500: #6B7280;
+            --gray-600: #4B5563;
+            --gray-700: #374151;
+            --gray-800: #1F2937;
+            --gray-900: #111827;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --border-color: #E5E7EB;
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F9FAFB;
+            --sidebar-width: 260px;
+            --shadow-sm: 0 1px 3px 0 rgba(0,0,0,.1),0 1px 2px 0 rgba(0,0,0,.06);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -1px rgba(0,0,0,.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -2px rgba(0,0,0,.05);
+            --radius-sm: .375rem;
+            --radius-md: .5rem;
+            --radius-lg: .75rem;
+            --radius-xl: 1rem;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+        }
+
+        h1,h2,h3,h4,h5,h6 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; }
+
+        .admin-layout { display: flex; min-height: 100vh; }
+
+        /* ===== SIDEBAR ===== */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-primary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0; left: 0; bottom: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-sm);
+            transition: transform .3s ease;
+        }
+
+        .sidebar-brand {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: .875rem;
+        }
+
+        .brand-icon {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-purple) 100%);
+            border-radius: var(--radius-md);
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 800; font-size: .875rem;
+            letter-spacing: -.5px;
+            box-shadow: 0 4px 12px rgba(37,99,235,.35);
+            flex-shrink: 0;
+        }
+
+        .brand-text h2 { font-size: 1.125rem; color: var(--text-primary); line-height: 1.2; }
+        .brand-text span { font-size: .75rem; color: var(--text-secondary); font-weight: 500; }
+
+        .sidebar-nav { flex: 1; padding: 1rem .75rem; overflow-y: auto; }
+
+        .nav-section-label {
+            font-size: .6875rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: var(--gray-400);
+            padding: .5rem .75rem;
+            margin-top: .5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            padding: .6875rem .875rem;
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: .9375rem;
+            transition: all .2s;
+            cursor: pointer;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            margin-bottom: .125rem;
+        }
+
+        .nav-link:hover { background: var(--gray-50); color: var(--text-primary); }
+
+        .nav-link.active {
+            background: linear-gradient(135deg, rgba(37,99,235,.1) 0%, rgba(124,58,237,.07) 100%);
+            color: var(--primary-blue);
+            font-weight: 600;
+        }
+
+        .nav-link svg { width: 18px; height: 18px; flex-shrink: 0; stroke-width: 2; }
+
+        .nav-link-label { flex: 1; }
+
+        /* pending badge on nav */
+        .nav-badge {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 5px;
+            background: var(--accent-orange);
+            color: white;
+            border-radius: 999px;
+            font-size: .6875rem;
+            font-weight: 700;
+            line-height: 1;
+            animation: pulse-badge 2s infinite;
+        }
+        .nav-badge.visible { display: inline-flex; }
+        @keyframes pulse-badge {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,.5); }
+            50% { box-shadow: 0 0 0 5px rgba(245,158,11,0); }
+        }
+
+        .sidebar-footer {
+            padding: 1rem 1.25rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .admin-badge {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            padding: .75rem;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+        }
+
+        .admin-avatar {
+            width: 34px; height: 34px;
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-purple) 100%);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 700; font-size: .8125rem;
+        }
+
+        .admin-info span:first-child { display: block; font-weight: 600; font-size: .875rem; color: var(--text-primary); }
+        .admin-info span:last-child { font-size: .75rem; color: var(--text-secondary); }
+
+        /* ===== MAIN CONTENT ===== */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .topbar {
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .topbar-left { display: flex; align-items: center; gap: 1rem; }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: .5rem;
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+        }
+
+        .page-title-area h1 { font-size: 1.375rem; color: var(--text-primary); }
+        .page-title-area p { font-size: .875rem; color: var(--text-secondary); margin-top: .125rem; }
+
+        .topbar-actions { display: flex; align-items: center; gap: .75rem; }
+
+        .btn-back {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .5rem 1rem;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: .875rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all .2s;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .btn-back:hover { background: var(--gray-100); color: var(--text-primary); }
+
+        .content-area { flex: 1; padding: 2rem; }
+
+        /* ===== SECTIONS ===== */
+        .section { display: none; }
+        .section.active { display: block; }
+
+        /* ===== STAT CARDS ===== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all .3s;
+        }
+
+        .stat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; right: 0;
+            width: 80px; height: 80px;
+            border-radius: 0 var(--radius-xl) 0 100%;
+            opacity: .08;
+        }
+
+        .stat-card.blue::before   { background: var(--primary-blue); }
+        .stat-card.purple::before { background: var(--primary-purple); }
+        .stat-card.green::before  { background: var(--accent-green); }
+        .stat-card.orange::before { background: var(--accent-orange); }
+        .stat-card.cyan::before   { background: var(--accent-cyan); }
+
+        .stat-icon {
+            width: 44px; height: 44px;
+            border-radius: var(--radius-lg);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .stat-icon.blue   { background: rgba(37,99,235,.1);  color: var(--primary-blue); }
+        .stat-icon.purple { background: rgba(124,58,237,.1); color: var(--primary-purple); }
+        .stat-icon.green  { background: rgba(16,185,129,.1); color: var(--accent-green); }
+        .stat-icon.orange { background: rgba(245,158,11,.1); color: var(--accent-orange); }
+        .stat-icon.cyan   { background: rgba(6,182,212,.1);  color: var(--accent-cyan); }
+
+        .stat-icon svg { width: 22px; height: 22px; stroke-width: 2; }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            font-family: 'Space Grotesk', sans-serif;
+            line-height: 1;
+            margin-bottom: .375rem;
+        }
+
+        .stat-label { font-size: .875rem; color: var(--text-secondary); font-weight: 500; }
+
+        /* ===== WELCOME CARD ===== */
+        .welcome-card {
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-purple) 100%);
+            border-radius: var(--radius-xl);
+            padding: 2rem;
+            color: white;
+            margin-bottom: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .welcome-card::after {
+            content: '';
+            position: absolute;
+            top: -40px; right: -40px;
+            width: 160px; height: 160px;
+            background: rgba(255,255,255,.06);
+            border-radius: 50%;
+        }
+
+        .welcome-card h2 { font-size: 1.5rem; margin-bottom: .5rem; }
+        .welcome-card p { opacity: .8; font-size: .9375rem; }
+
+        /* ===== CARD ===== */
+        .card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .card-title { font-size: 1.0625rem; font-weight: 700; color: var(--text-primary); }
+        .card-body { padding: 0; }
+
+        /* ===== BUTTONS ===== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
+            padding: .6875rem 1.25rem;
+            font-weight: 600;
+            font-size: .9375rem;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            text-decoration: none;
+            transition: all .2s;
+            font-family: inherit;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .btn svg { width: 17px; height: 17px; stroke-width: 2; flex-shrink: 0; }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-purple) 100%);
+            color: white;
+            box-shadow: 0 4px 14px rgba(37,99,235,.35);
+        }
+
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(37,99,235,.45); }
+
+        .btn-success { background: var(--accent-green); color: white; }
+        .btn-success:hover { background: #059669; transform: translateY(-1px); }
+
+        .btn-danger { background: var(--accent-red); color: white; }
+        .btn-danger:hover { background: #dc2626; transform: translateY(-1px); }
+
+        .btn-ghost {
+            background: none;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-ghost:hover { background: var(--bg-secondary); color: var(--text-primary); }
+
+        .btn-sm { padding: .4375rem .875rem; font-size: .8125rem; }
+        .btn-sm svg { width: 14px; height: 14px; }
+
+        .btn-icon {
+            width: 34px; height: 34px;
+            padding: 0;
+            border-radius: var(--radius-sm);
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .2s;
+            font-family: inherit;
+        }
+
+        .btn-icon svg { width: 15px; height: 15px; stroke-width: 2; }
+        .btn-icon:hover { background: var(--bg-secondary); color: var(--text-primary); }
+        .btn-icon.edit:hover   { background: rgba(37,99,235,.08);  color: var(--primary-blue); border-color: rgba(37,99,235,.2); }
+        .btn-icon.delete:hover { background: rgba(239,68,68,.08);  color: var(--accent-red);   border-color: rgba(239,68,68,.2); }
+        .btn-icon.approve:hover { background: rgba(16,185,129,.08); color: var(--accent-green); border-color: rgba(16,185,129,.2); }
+
+        /* ===== TABLE ===== */
+        .table-wrapper { overflow-x: auto; }
+
+        table { width: 100%; border-collapse: collapse; }
+
+        thead th {
+            padding: .875rem 1.25rem;
+            text-align: left;
+            font-size: .75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: var(--text-secondary);
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        tbody tr { border-bottom: 1px solid var(--border-color); transition: background .15s; }
+        tbody tr:last-child { border-bottom: none; }
+        tbody tr:hover { background: var(--bg-secondary); }
+
+        tbody td { padding: 1rem 1.25rem; font-size: .9375rem; color: var(--text-primary); }
+
+        .td-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+        /* ===== BADGE ===== */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: .25rem .625rem;
+            border-radius: 2rem;
+            font-size: .75rem;
+            font-weight: 600;
+        }
+
+        .badge-blue   { background: rgba(37,99,235,.1);  color: var(--primary-blue); }
+        .badge-purple { background: rgba(124,58,237,.1); color: var(--primary-purple); }
+        .badge-green  { background: rgba(16,185,129,.1); color: var(--accent-green); }
+        .badge-orange { background: rgba(245,158,11,.1); color: var(--accent-orange); }
+        .badge-gray   { background: var(--gray-100);     color: var(--gray-500); }
+        .badge-cyan   { background: rgba(6,182,212,.1);  color: var(--accent-cyan); }
+
+        /* ===== FORM ===== */
+        .form-group { display: flex; flex-direction: column; gap: .375rem; margin-bottom: 1.125rem; }
+        .form-label { font-weight: 600; font-size: .875rem; color: var(--text-primary); }
+
+        .form-control {
+            padding: .75rem 1rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: .9375rem;
+            font-family: inherit;
+            background: white;
+            color: var(--text-primary);
+            transition: all .2s;
+            width: 100%;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+        }
+
+        .form-control::placeholder { color: var(--gray-400); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+        .form-error { font-size: .8125rem; color: var(--accent-red); display: none; }
+
+        /* ===== MODAL ===== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.45);
+            backdrop-filter: blur(4px);
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .modal-overlay.open { display: flex; }
+
+        .modal {
+            background: var(--bg-primary);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-lg);
+            width: 100%;
+            max-width: 480px;
+            animation: modalIn .2s ease;
+        }
+
+        @keyframes modalIn {
+            from { opacity: 0; transform: translateY(-16px) scale(.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .modal-header {
+            padding: 1.375rem 1.5rem 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-title { font-size: 1.125rem; color: var(--text-primary); }
+
+        .modal-close {
+            width: 32px; height: 32px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all .2s;
+        }
+
+        .modal-close:hover { background: var(--gray-100); color: var(--text-primary); }
+        .modal-close svg { width: 16px; height: 16px; stroke-width: 2.5; }
+
+        .modal-body { padding: 1.25rem 1.5rem; }
+
+        .modal-footer {
+            padding: 0 1.5rem 1.375rem;
+            display: flex;
+            justify-content: flex-end;
+            gap: .75rem;
+        }
+
+        /* ===== CONFIRM DIALOG ===== */
+        .confirm-icon {
+            width: 52px; height: 52px;
+            background: rgba(239,68,68,.1);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 1rem;
+        }
+
+        .confirm-icon svg { width: 26px; height: 26px; stroke-width: 2; color: var(--accent-red); }
+        .confirm-icon.green-icon { background: rgba(16,185,129,.1); }
+        .confirm-icon.green-icon svg { color: var(--accent-green); }
+
+        .confirm-text { text-align: center; }
+        .confirm-text h3 { margin-bottom: .5rem; }
+        .confirm-text p { color: var(--text-secondary); font-size: .9375rem; }
+
+        /* ===== TOAST ===== */
+        #toast-container {
+            position: fixed;
+            top: 1.25rem;
+            right: 1.25rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: .625rem;
+        }
+
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: .875rem;
+            padding: .875rem 1.125rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            max-width: 360px;
+            animation: toastIn .25s ease;
+            font-size: .9375rem;
+        }
+
+        @keyframes toastIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+
+        .toast.success { border-left-color: var(--accent-green); }
+        .toast.error   { border-left-color: var(--accent-red); }
+        .toast-icon { flex-shrink: 0; }
+        .toast-icon svg { width: 18px; height: 18px; stroke-width: 2.5; }
+        .toast.success .toast-icon { color: var(--accent-green); }
+        .toast.error   .toast-icon { color: var(--accent-red); }
+        .toast-msg { font-weight: 500; color: var(--text-primary); }
+
+        /* ===== EMPTY STATE ===== */
+        .empty-state { text-align: center; padding: 3.5rem 2rem; color: var(--text-secondary); }
+        .empty-state svg { width: 48px; height: 48px; opacity: .25; margin-bottom: 1rem; stroke-width: 1.5; }
+        .empty-state h3 { font-size: 1.125rem; margin-bottom: .375rem; color: var(--text-primary); }
+        .empty-state p { font-size: .9375rem; }
+
+        /* ===== SKELETON ===== */
+        .skeleton {
+            background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 50%, var(--gray-100) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: var(--radius-sm);
+        }
+
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        /* ===== ALERT ===== */
+        .alert {
+            padding: .875rem 1.125rem;
+            border-radius: var(--radius-md);
+            border: 1px solid;
+            margin-bottom: 1.25rem;
+            font-size: .9375rem;
+            display: flex;
+            align-items: flex-start;
+            gap: .75rem;
+        }
+
+        .alert svg { flex-shrink: 0; width: 18px; height: 18px; stroke-width: 2; margin-top: .1rem; }
+        .alert-error   { background: rgba(239,68,68,.06);  border-color: rgba(239,68,68,.25);  color: #b91c1c; }
+        .alert-success { background: rgba(16,185,129,.06); border-color: rgba(16,185,129,.25); color: #065f46; }
+        .alert-info    { background: rgba(37,99,235,.06);  border-color: rgba(37,99,235,.2);   color: var(--primary-dark); }
+
+        /* ===== PENDING REVIEW CARD ===== */
+        .pending-meta {
+            font-size: .8125rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .pending-file {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: .9rem;
+        }
+
+        /* ===== MOBILE ===== */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.4);
+            z-index: 99;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-overlay.open { display: block; }
+            .main-content { margin-left: 0; }
+            .mobile-menu-btn { display: flex; align-items: center; justify-content: center; }
+            .content-area { padding: 1.25rem; }
+            .form-row { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr; }
+            .topbar { padding: .875rem 1.25rem; }
+            .topbar-actions .btn-back { padding: .5rem .625rem; font-size: 0; }
+            .topbar-actions .btn-back svg { width: 18px; height: 18px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="toast-container"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<div class="admin-layout">
+    <!-- ========== SIDEBAR ========== -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">PYQ</div>
+            <div class="brand-text">
+                <h2>Admin</h2>
+                <span>Marian College</span>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-section-label">Overview</div>
+            <a class="nav-link" href="#dashboard" data-section="dashboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                <span class="nav-link-label">Dashboard</span>
+            </a>
+
+            <div class="nav-section-label">Manage</div>
+            <a class="nav-link" href="#subjects" data-section="subjects">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                <span class="nav-link-label">Subjects</span>
+            </a>
+            <a class="nav-link" href="#papers" data-section="papers">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10,9 9,9 8,9"/></svg>
+                <span class="nav-link-label">Papers</span>
+            </a>
+            <a class="nav-link" href="#pending" data-section="pending" id="navPending">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                <span class="nav-link-label">Pending Reviews</span>
+                <span class="nav-badge" id="pendingNavBadge">0</span>
+            </a>
+
+            <div class="nav-section-label">Settings</div>
+            <a class="nav-link" href="#password" data-section="password">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span class="nav-link-label">Change Password</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="admin-badge">
+                <div class="admin-avatar">{{ session.username[0].upper() if session.username else 'A' }}</div>
+                <div class="admin-info">
+                    <span>{{ session.username or 'Admin' }}</span>
+                    <span>Administrator</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ========== MAIN ========== -->
+    <div class="main-content">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="mobile-menu-btn" onclick="openSidebar()">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <div class="page-title-area">
+                    <h1 id="pageTitle">Dashboard</h1>
+                    <p id="pageSubtitle">Welcome back, {{ session.username or 'Admin' }}</p>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <a href="{{ url_for('home') }}" class="btn-back">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+                    Portal
+                </a>
+                <a href="{{ url_for('logout') }}" class="btn-back">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Logout
+                </a>
+            </div>
+        </header>
+
+        <div class="content-area">
+
+            <!-- ======= DASHBOARD ======= -->
+            <div id="section-dashboard" class="section active">
+                <div class="welcome-card">
+                    <h2>👋 Welcome to Admin Panel</h2>
+                    <p>Manage your PYQ Portal subjects, papers, and settings from here.</p>
+                </div>
+
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card blue">
+                        <div class="stat-icon blue">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                        </div>
+                        <div class="stat-value" id="stat-subjects">—</div>
+                        <div class="stat-label">Total Subjects</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <div class="stat-icon purple">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+                        </div>
+                        <div class="stat-value" id="stat-papers">—</div>
+                        <div class="stat-label">Total Papers</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-icon green">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        </div>
+                        <div class="stat-value" id="stat-ai">—</div>
+                        <div class="stat-label">AI Analysed</div>
+                    </div>
+                    <div class="stat-card orange">
+                        <div class="stat-icon orange">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+                        </div>
+                        <div class="stat-value" id="stat-recent">—</div>
+                        <div class="stat-label">Uploads (30d)</div>
+                    </div>
+                    <div class="stat-card cyan" style="cursor:pointer" onclick="navigateTo('pending')">
+                        <div class="stat-icon cyan">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                        </div>
+                        <div class="stat-value" id="stat-pending">—</div>
+                        <div class="stat-label">Pending Reviews</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Quick Actions</span>
+                    </div>
+                    <div class="card-body" style="padding:1.25rem;display:flex;flex-wrap:wrap;gap:.75rem;">
+                        <a class="btn btn-primary" href="#subjects" data-section="subjects" id="quickAddSubjectBtn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add Subject
+                        </a>
+                        <a href="{{ url_for('upload_page') }}" class="btn btn-ghost">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:17px;height:17px;stroke-width:2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Upload Paper
+                        </a>
+                        <a class="btn btn-ghost" href="#pending" data-section="pending">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:17px;height:17px;stroke-width:2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                            Review Submissions
+                        </a>
+                        <a href="{{ url_for('view_papers') }}" class="btn btn-ghost">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:17px;height:17px;stroke-width:2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            View Browse Page
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======= SUBJECTS ======= -->
+            <div id="section-subjects" class="section">
+                <div class="card">
+                    <div class="card-header">
+                        <div style="display:flex;align-items:center;gap:.75rem;">
+                            <span class="card-title">Subjects</span>
+                            <span id="subjectCountBadge" class="badge badge-blue" style="display:none;"></span>
+                        </div>
+                        <div style="display:flex; gap:.5rem;">
+                            <button class="btn btn-secondary" onclick="openModal('modalAddDepartment')">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                Add Department
+                            </button>
+                            <button class="btn btn-primary" id="addSubjectBtn" onclick="openAddSubjectModal()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                Add Subject
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ── Filter Bar ── -->
+                    <div style="padding:.85rem 1.25rem; border-bottom:1px solid var(--border-color); display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; background:var(--bg-secondary,#f9fafb);">
+                        <!-- Dept filter -->
+                        <div style="display:flex;flex-direction:column;gap:.25rem;">
+                            <label style="font-size:.7rem;font-weight:700;color:var(--text-secondary);letter-spacing:.06em;text-transform:uppercase;">Department</label>
+                            <select id="filterSubjectDept" class="form-control" style="min-width:140px;font-size:.85rem;padding:.35rem .7rem;" onchange="applySubjectFilters()">
+                                <option value="">All Departments</option>
+                                {% for slug, name in departments.items() %}
+                                <option value="{{ name }}">{{ name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <!-- Sem filter -->
+                        <div style="display:flex;flex-direction:column;gap:.25rem;">
+                            <label style="font-size:.7rem;font-weight:700;color:var(--text-secondary);letter-spacing:.06em;text-transform:uppercase;">Semester</label>
+                            <select id="filterSubjectSem" class="form-control" style="min-width:130px;font-size:.85rem;padding:.35rem .7rem;" onchange="applySubjectFilters()">
+                                <option value="">All Semesters</option>
+                                {% for i in range(1, 9) %}
+                                <option value="{{ i }}">Semester {{ i }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <!-- Name search -->
+                        <div style="display:flex;flex-direction:column;gap:.25rem;flex:1;min-width:180px;">
+                            <label style="font-size:.7rem;font-weight:700;color:var(--text-secondary);letter-spacing:.06em;text-transform:uppercase;">Search Name</label>
+                            <div style="position:relative;">
+                                <svg style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#9CA3AF;pointer-events:none;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                                <input type="text" id="filterSubjectName" class="form-control"
+                                       placeholder="Search subjects…"
+                                       style="padding-left:2rem;font-size:.85rem;"
+                                       oninput="applySubjectFilters()">
+                            </div>
+                        </div>
+                        <!-- Clear button -->
+                        <div style="display:flex;flex-direction:column;gap:.25rem;justify-content:flex-end;">
+                            <label style="font-size:.7rem;visibility:hidden;">x</label>
+                            <button class="btn btn-ghost btn-sm" onclick="clearSubjectFilters()" id="clearSubjectFiltersBtn" style="display:none;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px;height:14px;stroke-width:2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Subject Name</th>
+                                        <th>Department</th>
+                                        <th>Semester</th>
+                                        <th>Papers</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="subjectsTableBody">
+                                    <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- ======= PAPERS ======= -->
+            <div id="section-papers" class="section">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Question Papers</span>
+                        <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Upload Paper
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Subject</th>
+                                        <th>Semester</th>
+                                        <th>Year</th>
+                                        <th>Exam Type</th>
+                                        <th>File Size</th>
+                                        <th>AI</th>
+                                        <th>Uploaded</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="papersTableBody">
+                                    <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======= PENDING REVIEWS ======= -->
+            <div id="section-pending" class="section">
+                <div class="card">
+                    <div class="card-header">
+                        <div style="display:flex;align-items:center;gap:.75rem;">
+                            <span class="card-title">Pending Submissions</span>
+                            <span class="badge badge-orange" id="pendingCountBadge" style="display:none">0 pending</span>
+                        </div>
+                        <button class="btn btn-ghost btn-sm" onclick="loadPending()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="23,4 23,11 16,11"/><polyline points="1,20 1,13 8,13"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 11M1 13l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                            Refresh
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>File</th>
+                                        <th>Subject</th>
+                                        <th>Sem</th>
+                                        <th>Year</th>
+                                        <th>Exam Type</th>
+                                        <th>Size</th>
+                                        <th>Submitted</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pendingTableBody">
+                                    <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======= CHANGE PASSWORD ======= -->
+            <div id="section-password" class="section">
+                <div style="max-width:500px;">
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">🔐 Change Admin Password</span>
+                        </div>
+                        <div class="card-body" style="padding:1.5rem;">
+                            <div class="alert alert-info">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                This changes the password for <strong>{{ session.username or 'admin' }}</strong>. You will need to log in again after.
+                            </div>
+                            <div id="pwAlert"></div>
+                            <form id="changePasswordForm" onsubmit="submitChangePassword(event)">
+                                <div class="form-group">
+                                    <label class="form-label">Current Password</label>
+                                    <input type="password" class="form-control" name="current_password" required placeholder="Enter current password">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">New Password</label>
+                                    <input type="password" class="form-control" name="new_password" required minlength="6" placeholder="Min. 6 characters">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Confirm New Password</label>
+                                    <input type="password" class="form-control" name="confirm_password" required placeholder="Repeat new password">
+                                    <span class="form-error" id="pwMatchError">Passwords do not match.</span>
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.5rem;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                    Update Password
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /content-area -->
+    </div><!-- /main-content -->
+</div><!-- /admin-layout -->
+
+<!-- ========== ADD DEPARTMENT MODAL ========== -->
+<div class="modal-overlay" id="modalAddDepartment">
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Add / Manage Department</h3>
+            <button class="modal-close" onclick="closeModal('modalAddDepartment')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <form action="{{ url_for('add_department') }}" method="POST">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Department Name <span style="color:var(--accent-red)">*</span></label>
+                    <input type="text" class="form-control" name="name" placeholder="e.g. Master of Computer Applications" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">URL Slug <span style="color:var(--accent-red)">*</span></label>
+                    <input type="text" class="form-control" name="slug" placeholder="e.g. mca" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Code / Short Name</label>
+                    <input type="text" class="form-control" name="code" placeholder="e.g. MCA">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Emoji Icon</label>
+                    <input type="text" class="form-control" name="icon" placeholder="e.g. 💻, 📊, ⚛️" value="📚">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description / Subtitle</label>
+                    <input type="text" class="form-control" name="description" placeholder="e.g. Master of Computer Applications">
+                </div>
+                <div class="form-group" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem;">
+                    <input type="checkbox" id="is_coming_soon" name="is_coming_soon">
+                    <label for="is_coming_soon" style="font-size:0.85rem; font-weight:600; cursor:pointer;">Mark as "Coming Soon"</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('modalAddDepartment')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Department</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ========== ADD SUBJECT MODAL (BULK) ========== -->
+<div class="modal-overlay" id="modalAddSubject">
+    <div class="modal" style="max-width:560px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Add Subjects</h3>
+            <button class="modal-close" onclick="closeModal('modalAddSubject')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div id="addSubjectAlert"></div>
+
+            <!-- Shared Department + Semester (applied to ALL subjects below) -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.25rem;">
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">Department <span style="color:var(--accent-red)">*</span></label>
+                    <select class="form-control" id="bulkSubjectDept" required>
+                        {% for slug, name in departments.items() %}
+                        <option value="{{ name }}"{% if slug == 'bca' %} selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">Semester</label>
+                    <select class="form-control" id="bulkSubjectSem">
+                        <option value="">— Select semester —</option>
+                        {% for i in range(1, 9) %}
+                        <option value="{{ i }}">Semester {{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;">
+                <span style="font-size:0.8rem; font-weight:700; color:#6B7280; white-space:nowrap;">SUBJECT NAMES</span>
+                <div style="flex:1; height:1px; background:#E5E7EB;"></div>
+                <span style="font-size:0.75rem; color:#9CA3AF;">one per row</span>
+            </div>
+
+            <!-- Dynamic subject name rows -->
+            <div id="bulkSubjectRows" style="display:flex; flex-direction:column; gap:0.5rem; max-height:280px; overflow-y:auto; padding-right:2px;">
+                <!-- rows injected by JS -->
+            </div>
+
+            <!-- Add row button -->
+            <button type="button" id="bulkAddRowBtn" onclick="addBulkRow()"
+                style="margin-top:0.75rem; display:inline-flex; align-items:center; gap:0.4rem;
+                       background:none; border:1.5px dashed #D1D5DB; border-radius:8px;
+                       padding:0.45rem 1rem; font-size:0.85rem; font-weight:600;
+                       color:#6B7280; cursor:pointer; width:100%; justify-content:center;
+                       transition:border-color 0.15s, color 0.15s;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Another Subject
+            </button>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('modalAddSubject')">Cancel</button>
+            <button type="button" class="btn btn-primary" id="addSubjectSubmitBtn" onclick="submitBulkSubjects()">
+                Save All Subjects
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ========== EDIT SUBJECT MODAL ========== -->
+<div class="modal-overlay" id="modalEditSubject">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 class="modal-title">Edit Subject</h3>
+            <button class="modal-close" onclick="closeModal('modalEditSubject')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div id="editSubjectAlert"></div>
+            <form id="editSubjectForm" onsubmit="submitEditSubject(event)">
+                <input type="hidden" name="subject_id" id="editSubjectId">
+                <div class="form-group">
+                    <label class="form-label">Subject Name <span style="color:var(--accent-red)">*</span></label>
+                    <input type="text" class="form-control" name="subject_name" id="editSubjectName" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Department <span style="color:var(--accent-red)">*</span></label>
+                    <select class="form-control" name="department" id="editSubjectDepartment" required>
+                        {% for slug, name in departments.items() %}
+                        <option value="{{ name }}">{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Semester</label>
+                    <select class="form-control" name="semester" id="editSubjectSemester">
+                        <option value="">— No semester —</option>
+                        {% for i in range(1, 9) %}
+                        <option value="{{ i }}">Semester {{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('modalEditSubject')">Cancel</button>
+            <button type="submit" form="editSubjectForm" class="btn btn-primary" id="editSubjectSubmitBtn">Update Subject</button>
+        </div>
+            </form>
+    </div>
+</div>
+
+<!-- ========== GENERIC CONFIRM MODAL ========== -->
+<div class="modal-overlay" id="modalConfirmDelete">
+    <div class="modal" style="max-width:400px;">
+        <div class="modal-body" style="padding:2rem 1.5rem 1rem;">
+            <div class="confirm-icon" id="confirmIcon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </div>
+            <div class="confirm-text">
+                <h3 id="deleteModalTitle">Confirm Action</h3>
+                <p id="deleteModalBody">Are you sure? This action cannot be undone.</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal('modalConfirmDelete')">Cancel</button>
+            <button class="btn btn-danger" id="confirmDeleteBtn">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== APPROVE CONFIRM MODAL ========== -->
+<div class="modal-overlay" id="modalConfirmApprove">
+    <div class="modal" style="max-width:400px;">
+        <div class="modal-body" style="padding:2rem 1.5rem 1rem;">
+            <div class="confirm-icon green-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12"/></svg>
+            </div>
+            <div class="confirm-text">
+                <h3>Approve Submission</h3>
+                <p id="approveModalBody">Approve this paper? It will be moved to the main bucket and published immediately.</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal('modalConfirmApprove')">Cancel</button>
+            <button class="btn btn-success" id="confirmApproveBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:15px;height:15px;stroke-width:2.5"><polyline points="20,6 9,17 4,12"/></svg>
+                Yes, Publish
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ===== NAVIGATION =====
+const pageTitles = {
+    dashboard: ['Dashboard',         'Overview of your portal activity'],
+    subjects:  ['Subjects',          'Manage academic subjects'],
+    papers:    ['Question Papers',   'View and manage uploaded papers'],
+    pending:   ['Pending Reviews',   'Approve or reject user-submitted papers'],
+    password:  ['Change Password',   'Update admin login credentials'],
+};
+
+const VALID_SECTIONS = new Set(['dashboard', 'subjects', 'papers', 'pending', 'password']);
+
+function showSection(name, pushState = false) {
+    if (!VALID_SECTIONS.has(name)) name = 'dashboard';
+
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+
+    const sectionEl = document.getElementById('section-' + name);
+    if (sectionEl) sectionEl.classList.add('active');
+
+    document.querySelectorAll('.nav-link[data-section]').forEach(l => {
+        if (l.dataset.section === name) l.classList.add('active');
+    });
+
+    const [title, sub] = pageTitles[name] || [name, ''];
+    document.getElementById('pageTitle').textContent = title;
+    document.getElementById('pageSubtitle').textContent = sub;
+    closeSidebar();
+
+    // Update URL hash without triggering hashchange again
+    if (location.hash !== '#' + name) {
+        history.pushState(null, '', '#' + name);
+    }
+
+    if (name === 'dashboard') loadStats();
+    if (name === 'subjects')  loadSubjects();
+    if (name === 'papers')    loadPapers();
+    if (name === 'pending')   loadPending();
+}
+
+function navigateTo(name) {
+    showSection(name);
+}
+
+// ===== SIDEBAR MOBILE =====
+function openSidebar() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebarOverlay').classList.add('open');
+}
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+// ===== MODAL =====
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+});
+
+// ===== TOAST =====
+function toast(msg, type = 'success') {
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    const icon = type === 'success'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+    el.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-msg">${escHtml(msg)}</span>`;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(() => el.remove(), 3800);
+}
+
+// ===== STATS =====
+async function loadStats() {
+    try {
+        const [statsRes, pendingRes] = await Promise.all([
+            fetch('/admin/api/stats'),
+            fetch('/admin/api/pending')
+        ]);
+        const d = await statsRes.json();
+        document.getElementById('stat-subjects').textContent = d.total_subjects ?? 0;
+        document.getElementById('stat-papers').textContent   = d.total_papers   ?? 0;
+        document.getElementById('stat-ai').textContent       = d.papers_with_ai ?? 0;
+        document.getElementById('stat-recent').textContent   = d.recent_uploads ?? 0;
+
+        if (pendingRes.ok) {
+            const pending = await pendingRes.json();
+            const count = Array.isArray(pending) ? pending.length : 0;
+            document.getElementById('stat-pending').textContent = count;
+            updatePendingBadge(count);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+function updatePendingBadge(count) {
+    const badge = document.getElementById('pendingNavBadge');
+    const cardBadge = document.getElementById('pendingCountBadge');
+    if (count > 0) {
+        badge.textContent = count;
+        badge.classList.add('visible');
+        if (cardBadge) { cardBadge.textContent = count + ' pending'; cardBadge.style.display = ''; }
+    } else {
+        badge.classList.remove('visible');
+        if (cardBadge) cardBadge.style.display = 'none';
+    }
+}
+
+// ===== SUBJECTS =====
+let _allSubjects = [];   // cached full list
+
+async function loadSubjects() {
+    const tbody = document.getElementById('subjectsTableBody');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>';
+    try {
+        const r = await fetch('/admin/api/subjects');
+        _allSubjects = await r.json();
+        applySubjectFilters();   // render with current filter state
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--accent-red);padding:2rem">Failed to load subjects.</td></tr>';
+    }
+}
+
+function renderSubjectsTable(subjects) {
+    const tbody = document.getElementById('subjectsTableBody');
+    const badge = document.getElementById('subjectCountBadge');
+
+    // Update count badge
+    if (badge) {
+        badge.textContent = `${subjects.length} shown`;
+        badge.style.display = subjects.length !== _allSubjects.length ? '' : 'none';
+    }
+
+    if (!subjects.length) {
+        const hasFilter = document.getElementById('filterSubjectDept').value ||
+                          document.getElementById('filterSubjectSem').value  ||
+                          document.getElementById('filterSubjectName').value.trim();
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <h3>${hasFilter ? 'No subjects match your filters' : 'No subjects yet'}</h3>
+            <p>${hasFilter ? 'Try clearing the filters.' : 'Click "Add Subject" to get started.'}</p>
+        </div></td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = subjects.map(s => `
+        <tr>
+            <td style="color:var(--text-secondary)">${s.subject_id}</td>
+            <td style="font-weight:600">${escHtml(s.subject_name)}</td>
+            <td>${s.department ? `<span class="badge badge-green">${escHtml(s.department)}</span>` : '<span class="badge badge-gray">—</span>'}</td>
+            <td>${s.semester ? `<span class="badge badge-blue">Sem ${s.semester}</span>` : '<span class="badge badge-gray">—</span>'}</td>
+            <td><span class="badge badge-purple">${s.paper_count ?? 0} papers</span></td>
+            <td>
+                <div class="td-actions">
+                    <button class="btn-icon edit" title="Edit" onclick="openEditSubjectModal(${s.subject_id},'${escAttr(s.subject_name)}',${s.semester || 'null'},'${escAttr(s.department || 'BCA')}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button class="btn-icon delete" title="Delete" onclick="openDeleteSubjectModal(${s.subject_id},'${escAttr(s.subject_name)}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                    </button>
+                </div>
+            </td>
+        </tr>`).join('');
+}
+
+function applySubjectFilters() {
+    const dept    = document.getElementById('filterSubjectDept').value;
+    const sem     = document.getElementById('filterSubjectSem').value;
+    const nameQ   = document.getElementById('filterSubjectName').value.trim().toLowerCase();
+    const clearBtn = document.getElementById('clearSubjectFiltersBtn');
+
+    const isFiltered = dept || sem || nameQ;
+    if (clearBtn) clearBtn.style.display = isFiltered ? '' : 'none';
+
+    const filtered = _allSubjects.filter(s => {
+        if (dept && s.department !== dept) return false;
+        if (sem  && String(s.semester || '') !== sem) return false;
+        if (nameQ && !s.subject_name.toLowerCase().includes(nameQ)) return false;
+        return true;
+    });
+
+    renderSubjectsTable(filtered);
+}
+
+function clearSubjectFilters() {
+    document.getElementById('filterSubjectDept').value = '';
+    document.getElementById('filterSubjectSem').value  = '';
+    document.getElementById('filterSubjectName').value = '';
+    applySubjectFilters();
+}
+
+
+/* ── Bulk Add Subjects ── */
+let bulkRowCount = 0;
+
+function openAddSubjectModal() {
+    // Reset
+    document.getElementById('bulkSubjectRows').innerHTML = '';
+    document.getElementById('addSubjectAlert').innerHTML = '';
+    document.getElementById('addSubjectSubmitBtn').disabled = false;
+    document.getElementById('addSubjectSubmitBtn').textContent = 'Save All Subjects';
+    bulkRowCount = 0;
+    // Start with 3 empty rows
+    addBulkRow(); addBulkRow(); addBulkRow();
+    openModal('modalAddSubject');
+    // Focus first input
+    setTimeout(() => {
+        const first = document.querySelector('#bulkSubjectRows .bulk-row-input');
+        if (first) first.focus();
+    }, 80);
+}
+
+function addBulkRow(prefill = '') {
+    bulkRowCount++;
+    const id = `bulkRow_${bulkRowCount}`;
+    const row = document.createElement('div');
+    row.id = id;
+    row.style.cssText = 'display:flex; align-items:center; gap:0.5rem;';
+    row.innerHTML = `
+        <span style="min-width:24px; text-align:right; font-size:0.78rem; color:#9CA3AF; font-weight:600;">${bulkRowCount}</span>
+        <input type="text" class="form-control bulk-row-input"
+               placeholder="Subject name e.g. Data Structures"
+               value="${prefill.replace(/"/g, '&quot;')}"
+               style="flex:1; font-size:0.9rem;"
+               onkeydown="handleBulkRowKey(event, '${id}')">
+        <button type="button" onclick="removeBulkRow('${id}')"
+                title="Remove"
+                style="flex-shrink:0; display:flex; align-items:center; justify-content:center;
+                       background:none; border:none; color:#9CA3AF; cursor:pointer;
+                       width:28px; height:28px; border-radius:6px;
+                       transition:color 0.15s, background 0.15s;"
+                onmouseover="this.style.color='#EF4444'; this.style.background='#FEF2F2';"
+                onmouseout="this.style.color='#9CA3AF'; this.style.background='none';">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        </button>`;
+    document.getElementById('bulkSubjectRows').appendChild(row);
+    // Renumber all rows
+    renumberBulkRows();
+    return row.querySelector('input');
+}
+
+function removeBulkRow(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+    renumberBulkRows();
+}
+
+function renumberBulkRows() {
+    document.querySelectorAll('#bulkSubjectRows > div').forEach((row, i) => {
+        const num = row.querySelector('span');
+        if (num) num.textContent = i + 1;
+    });
+}
+
+function handleBulkRowKey(e, currentId) {
+    // Enter → add new row and focus it
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const inp = addBulkRow();
+        inp.focus();
+    }
+    // Backspace on empty → remove row, go up
+    if (e.key === 'Backspace' && e.target.value === '') {
+        e.preventDefault();
+        const rows = Array.from(document.querySelectorAll('#bulkSubjectRows > div'));
+        const idx = rows.findIndex(r => r.id === currentId);
+        removeBulkRow(currentId);
+        if (idx > 0) {
+            const prev = rows[idx - 1];
+            if (prev) {
+                const inp = prev.querySelector('input');
+                if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+            }
+        }
+    }
+}
+
+async function submitBulkSubjects() {
+    const btn = document.getElementById('addSubjectSubmitBtn');
+    const alertEl = document.getElementById('addSubjectAlert');
+    alertEl.innerHTML = '';
+
+    const department = document.getElementById('bulkSubjectDept').value;
+    const semester   = document.getElementById('bulkSubjectSem').value || null;
+    const names = Array.from(document.querySelectorAll('#bulkSubjectRows .bulk-row-input'))
+                       .map(i => i.value.trim()).filter(Boolean);
+
+    if (!names.length) {
+        alertEl.innerHTML = alertHtml('error', 'Enter at least one subject name.');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = `Saving ${names.length} subject${names.length > 1 ? 's' : ''}…`;
+
+    try {
+        const r = await fetch('/admin/api/subjects/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+            body: JSON.stringify({ subject_names: names, department, semester })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Failed');
+
+        const results = data.results || [];
+        const ok   = results.filter(x => x.ok);
+        const fail = results.filter(x => !x.ok);
+
+        if (fail.length === 0) {
+            toast(`✅ ${ok.length} subject${ok.length > 1 ? 's' : ''} added successfully!`);
+            closeModal('modalAddSubject');
+            loadSubjects();
+        } else {
+            // Show summary — keep modal open so admin can fix failures
+            let html = `<div style="margin-bottom:0.5rem;">
+                <strong style="color:#059669;">✅ ${ok.length} saved</strong>
+                ${fail.length ? `&nbsp;·&nbsp;<strong style="color:#EF4444;">❌ ${fail.length} failed</strong>` : ''}
+            </div>`;
+            if (fail.length) {
+                html += `<div style="font-size:0.82rem; color:#6B7280;">Failed: ${fail.map(f => `<em>${f.subject_name}</em>`).join(', ')}</div>`;
+            }
+            alertEl.innerHTML = `<div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:0.75rem 1rem; margin-bottom:1rem;">${html}</div>`;
+            loadSubjects();
+        }
+    } catch (err) {
+        alertEl.innerHTML = alertHtml('error', err.message);
+    }
+    btn.disabled = false;
+    btn.textContent = 'Save All Subjects';
+}
+
+
+function openEditSubjectModal(id, name, semester, department) {
+    document.getElementById('editSubjectId').value = id;
+    document.getElementById('editSubjectName').value = name;
+    document.getElementById('editSubjectSemester').value = semester || '';
+    document.getElementById('editSubjectDepartment').value = department || 'BCA';
+    document.getElementById('editSubjectAlert').innerHTML = '';
+    openModal('modalEditSubject');
+}
+
+async function submitEditSubject(e) {
+    e.preventDefault();
+    const btn = document.getElementById('editSubjectSubmitBtn');
+    const data = Object.fromEntries(new FormData(e.target));
+    const id = data.subject_id;
+    if (!data.semester) data.semester = null; else data.semester = parseInt(data.semester);
+    delete data.subject_id;
+    btn.disabled = true; btn.textContent = 'Updating…';
+    try {
+        const r = await fetch(`/admin/api/subjects/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type':'application/json','X-CSRFToken': getCsrf()},
+            body: JSON.stringify(data)
+        });
+        const result = await r.json();
+        if (!r.ok) throw new Error(result.error || 'Failed');
+        toast('Subject updated!');
+        closeModal('modalEditSubject');
+        loadSubjects();
+    } catch (err) {
+        document.getElementById('editSubjectAlert').innerHTML = alertHtml('error', err.message);
+    }
+    btn.disabled = false; btn.textContent = 'Update Subject';
+}
+
+function openDeleteSubjectModal(id, name) {
+    document.getElementById('deleteModalTitle').textContent = 'Delete Subject';
+    document.getElementById('deleteModalBody').textContent = `Delete "${name}"? This cannot be undone. Associated papers may be affected.`;
+    document.getElementById('confirmDeleteBtn').className = 'btn btn-danger';
+    document.getElementById('confirmDeleteBtn').textContent = 'Yes, Delete';
+    const btn = document.getElementById('confirmDeleteBtn');
+    btn.onclick = () => deleteSubject(id);
+    openModal('modalConfirmDelete');
+}
+
+async function deleteSubject(id) {
+    try {
+        const r = await fetch(`/admin/api/subjects/${id}`, {
+            method: 'DELETE',
+            headers: {'X-CSRFToken': getCsrf()}
+        });
+        if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Failed'); }
+        toast('Subject deleted.');
+        closeModal('modalConfirmDelete');
+        loadSubjects();
+    } catch (err) { toast(err.message, 'error'); }
+}
+
+// ===== PAPERS =====
+async function loadPapers() {
+    const tbody = document.getElementById('papersTableBody');
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>';
+    try {
+        const r = await fetch('/admin/api/papers');
+        const papers = await r.json();
+        if (!papers.length) {
+            tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg><h3>No papers uploaded yet</h3><p>Go to Upload page to add papers.</p></div></td></tr>`;
+            return;
+        }
+        tbody.innerHTML = papers.map(p => `
+            <tr>
+                <td style="font-weight:600">${escHtml(p.subject_name || '—')}</td>
+                <td>${p.semester ? `<span class="badge badge-blue">Sem ${p.semester}</span>` : '—'}</td>
+                <td>${p.year || '—'}</td>
+                <td>${p.exam_type ? `<span class="badge badge-purple">${escHtml(p.exam_type)}</span>` : '—'}</td>
+                <td><span class="badge badge-gray" style="font-family:monospace;font-size:.8rem;">${escHtml(p.file_size_formatted || '—')}</span></td>
+                <td>${p.ai_analysis ? '<span class="badge badge-green">✓ Yes</span>' : '<span class="badge badge-gray">No</span>'}</td>
+                <td style="color:var(--text-secondary);font-size:.875rem">${p.upload_date ? new Date(p.upload_date).toLocaleDateString() : '—'}</td>
+                <td>
+                    <div class="td-actions">
+                        ${p.file_url ? `<a href="${escAttr(p.file_url)}" target="_blank" class="btn-icon" title="View PDF" style="color:var(--primary-blue)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>` : ''}
+                        <button class="btn-icon delete" title="Delete" onclick="openDeletePaperModal(${p.paper_id},'${escAttr(p.subject_name || 'this paper')}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                        </button>
+                    </div>
+                </td>
+            </tr>`).join('');
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--accent-red);padding:2rem">Failed to load papers.</td></tr>';
+    }
+}
+
+function openDeletePaperModal(id, subject) {
+    document.getElementById('deleteModalTitle').textContent = 'Delete Paper';
+    document.getElementById('deleteModalBody').textContent = `Delete the paper for "${subject}"? This also removes the Supabase file.`;
+    document.getElementById('confirmDeleteBtn').className = 'btn btn-danger';
+    document.getElementById('confirmDeleteBtn').textContent = 'Yes, Delete';
+    const btn = document.getElementById('confirmDeleteBtn');
+    btn.onclick = () => deletePaper(id);
+    openModal('modalConfirmDelete');
+}
+
+async function deletePaper(id) {
+    try {
+        const r = await fetch(`/admin/api/papers/${id}`, {
+            method: 'DELETE',
+            headers: {'X-CSRFToken': getCsrf()}
+        });
+        if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Failed'); }
+        toast('Paper deleted.');
+        closeModal('modalConfirmDelete');
+        loadPapers();
+    } catch (err) { toast(err.message, 'error'); }
+}
+
+// ===== PENDING REVIEWS =====
+async function loadPending() {
+    const tbody = document.getElementById('pendingTableBody');
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>';
+    try {
+        const r = await fetch('/admin/api/pending');
+        if (!r.ok) throw new Error('Failed to load');
+        const items = await r.json();
+
+        updatePendingBadge(items.length);
+
+        if (!items.length) {
+            tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
+                <h3>All caught up!</h3>
+                <p>No pending submissions to review right now.</p>
+            </div></td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = items.map(item => {
+            const submittedAt = item.submitted_at
+                ? new Date(item.submitted_at).toLocaleString(undefined, {dateStyle:'medium', timeStyle:'short'})
+                : '—';
+            const previewBtn = item.preview_url
+                ? `<a href="${escAttr(item.preview_url)}" target="_blank" class="btn-icon" title="Preview PDF" style="color:var(--primary-blue)">
+                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                   </a>`
+                : '';
+            return `<tr>
+                <td>
+                    <div class="pending-file">${escHtml(item.file_name || '—')}</div>
+                    <div class="pending-meta">From: ${escHtml(item.submitted_by_ip || '—')}</div>
+                </td>
+                <td style="font-weight:600">${escHtml(item.subject_name || '—')}</td>
+                <td>${item.semester ? `<span class="badge badge-blue">Sem ${item.semester}</span>` : '—'}</td>
+                <td>${item.year || '—'}</td>
+                <td>${item.exam_type ? `<span class="badge badge-purple">${escHtml(item.exam_type)}</span>` : '<span class="badge badge-gray">—</span>'}</td>
+                <td><span class="badge badge-gray" style="font-family:monospace;font-size:.8rem;">${escHtml(item.formatted_file_size || '—')}</span></td>
+                <td style="color:var(--text-secondary);font-size:.875rem">${submittedAt}</td>
+                <td>
+                    <div class="td-actions">
+                        ${previewBtn}
+                        <button class="btn-icon approve" title="Approve & Publish"
+                            onclick="openApproveModal(${item.id}, '${escAttr(item.file_name || '')}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12"/></svg>
+                        </button>
+                        <button class="btn-icon delete" title="Reject & Delete"
+                            onclick="openRejectModal(${item.id}, '${escAttr(item.file_name || '')}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--accent-red);padding:2rem">Failed to load pending submissions.</td></tr>';
+    }
+}
+
+function openApproveModal(id, filename) {
+    document.getElementById('approveModalBody').textContent =
+        `Approve "${filename || 'this paper'}"? It will be moved to the main storage bucket and published to the portal immediately.`;
+    document.getElementById('confirmApproveBtn').onclick = () => approvePending(id);
+    openModal('modalConfirmApprove');
+}
+
+async function approvePending(id) {
+    const btn = document.getElementById('confirmApproveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:15px;height:15px;stroke-width:2.5"><polyline points="20,6 9,17 4,12"/></svg> Publishing…';
+    try {
+        const r = await fetch(`/admin/api/pending/${id}/approve`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCsrf()}
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Approve failed');
+        toast('Paper approved and published!');
+        closeModal('modalConfirmApprove');
+        loadPending();
+    } catch (err) {
+        toast(err.message, 'error');
+        closeModal('modalConfirmApprove');
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:15px;height:15px;stroke-width:2.5"><polyline points="20,6 9,17 4,12"/></svg> Yes, Publish';
+}
+
+function openRejectModal(id, filename) {
+    document.getElementById('deleteModalTitle').textContent = 'Reject Submission';
+    document.getElementById('deleteModalBody').textContent =
+        `Reject "${filename || 'this submission'}"? The file will be permanently deleted from staging storage.`;
+    document.getElementById('confirmDeleteBtn').className = 'btn btn-danger';
+    document.getElementById('confirmDeleteBtn').textContent = 'Yes, Reject';
+    const btn = document.getElementById('confirmDeleteBtn');
+    btn.onclick = () => rejectPending(id);
+    openModal('modalConfirmDelete');
+}
+
+async function rejectPending(id) {
+    try {
+        const r = await fetch(`/admin/api/pending/${id}/reject`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCsrf()}
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Reject failed');
+        toast('Submission rejected and deleted.');
+        closeModal('modalConfirmDelete');
+        loadPending();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+// ===== CHANGE PASSWORD =====
+async function submitChangePassword(e) {
+    e.preventDefault();
+    const form = e.target;
+    const alertEl = document.getElementById('pwAlert');
+    alertEl.innerHTML = '';
+    document.getElementById('pwMatchError').style.display = 'none';
+
+    const np = form.new_password.value;
+    const cp = form.confirm_password.value;
+    if (np !== cp) {
+        document.getElementById('pwMatchError').style.display = 'block';
+        return;
+    }
+
+    const btn = form.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Updating…';
+
+    try {
+        const r = await fetch('/admin/api/change-password', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json','X-CSRFToken': getCsrf()},
+            body: JSON.stringify({current_password: form.current_password.value, new_password: np})
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Failed');
+        alertEl.innerHTML = alertHtml('success', 'Password changed! You will be redirected to login…');
+        form.reset();
+        setTimeout(() => { window.location.href = '{{ url_for("logout") }}'; }, 2500);
+    } catch (err) {
+        alertEl.innerHTML = alertHtml('error', err.message);
+    }
+    btn.disabled = false; btn.textContent = 'Update Password';
+}
+
+// ===== HELPERS =====
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) { return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+function alertHtml(type, msg) {
+    const icon = type === 'success'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+    return `<div class="alert alert-${type}">${icon} ${escHtml(msg)}</div>`;
+}
+
+function getCsrf() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.content : '';
+}
+
+// ===== INIT =====
+// Handle nav link clicks — intercept anchor hash links
+document.querySelectorAll('.nav-link[data-section]').forEach(link => {
+    link.addEventListener('click', e => {
+        e.preventDefault();
+        showSection(link.dataset.section);
+    });
+});
+
+// Handle dashboard quick-links
+const quickBtn = document.getElementById('quickAddSubjectBtn');
+if (quickBtn) {
+    quickBtn.addEventListener('click', e => {
+        e.preventDefault();
+        showSection('subjects');
+        setTimeout(() => {
+            const btn = document.getElementById('addSubjectBtn');
+            if (btn) btn.click();
+        }, 80);
+    });
+}
+
+// On browser back/forward, update visible section
+window.addEventListener('popstate', () => {
+    const hash = location.hash.replace('#', '') || 'dashboard';
+    showSection(hash);
+});
+
+// On page load (or refresh), show the section from the URL hash
+(function initSection() {
+    const hash = location.hash.replace('#', '') || 'dashboard';
+    showSection(hash);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Paper - PYQ Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+</head>
+<body class="upload-page">
+  <!-- ==================== HEADER ==================== -->
+<header class="main-header">
+    <div class="container-fluid">
+        <div class="unified-header">
+            <!-- Left: College Branding -->
+            <div class="college-brand">
+                <img src="{{ url_for('static', filename='mcsc_logo.webp') }}" 
+                     alt="MCSC Marian College Students Council" 
+                     class="college-logo">
+            </div>
+
+            <!-- Center: Portal Branding -->
+            <div class="portal-brand">
+                <div class="portal-logo">
+                    <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="lgMark" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                                <stop offset="0%" stop-color="#3B82F6"/>
+                                <stop offset="100%" stop-color="#8B5CF6"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M20 10 C14 10 8 12 8 14 L8 30 C8 30 14 28 20 30 Z" fill="url(#lgMark)" opacity="0.9"/>
+                        <path d="M20 10 C26 10 32 12 32 14 L32 30 C32 30 26 28 20 30 Z" fill="url(#lgMark)" opacity="0.6"/>
+                        <line x1="20" y1="10" x2="20" y2="30" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+                        <circle cx="32" cy="10" r="3" fill="#F59E0B"/>
+                        <path d="M32 8.2 L32.5 9.5 L34 9.5 L32.8 10.4 L33.2 11.8 L32 11 L30.8 11.8 L31.2 10.4 L30 9.5 L31.5 9.5 Z" fill="white" opacity="0.9"/>
+                    </svg>
+                </div>
+                <div class="portal-text">
+                    <h1 class="portal-title">PYQ Portal</h1>
+                    <p class="portal-subtitle">Previous Year Question Papers</p>
+                </div>
+            </div>
+
+            <!-- Right: Navigation & Actions -->
+            <div class="header-actions">
+                <nav class="main-nav">
+                    <ul class="nav-list">
+                        <li><a href="{{ url_for('home') }}" class="nav-link">Home</a></li>
+                        <li><a href="{{ url_for('view_papers') }}" class="nav-link">Browse</a></li>
+                        <li><a href="{{ url_for('user_upload') }}" class="nav-link">Upload Paper</a></li>
+                        {% if session.get('role') == 'admin' %}
+                        <li><a href="{{ url_for('upload_page') }}" class="nav-link active">Upload</a></li>
+                        {% endif %}
+                        <li><a href="{{ url_for('about') }}" class="nav-link">About</a></li>
+                    </ul>
+                </nav>
+                <div class="header-user">
+                    <button class="icon-btn" onclick="openPopup('help')" title="Help">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                    </button>
+
+                    {% if session.get('user_id') %}
+                    <div class="user-menu desktop-only">
+                        <span class="user-name">{{ session.username }}</span>
+                        <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+                    </div>
+                    {% else %}
+                    <a href="{{ url_for('login') }}" class="btn-login desktop-only">Login</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Mobile Menu Toggle -->
+            <button class="mobile-menu-toggle" id="mobileMenuToggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+
+        <!-- Mobile Navigation -->
+        <div class="mobile-nav" id="mobileNav">
+            <nav>
+                <a href="{{ url_for('home') }}" class="mobile-nav-link">Home</a>
+                <a href="{{ url_for('view_papers') }}" class="mobile-nav-link">Browse Papers</a>
+                <a href="{{ url_for('user_upload') }}" class="mobile-nav-link">Upload Paper</a>
+                {% if session.get('role') == 'admin' %}
+                <a href="{{ url_for('upload_page') }}" class="mobile-nav-link active">Upload</a>
+                {% endif %}
+                <a href="{{ url_for('about') }}" class="mobile-nav-link">About</a>
+                <hr class="mobile-nav-divider">
+                <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
+                {% if session.get('user_id') %}
+                <hr class="mobile-nav-divider">
+                <span class="mobile-nav-user">{{ session.username }}</span>
+                <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
+                {% else %}
+                <hr class="mobile-nav-divider">
+                <a href="{{ url_for('login') }}" class="mobile-nav-link mobile-nav-login">Login</a>
+                {% endif %}
+            </nav>
+        </div>
+    </div>
+</header>
+
+    <!-- ==================== PAGE HEADER ==================== -->
+    <section class="page-header">
+        <div class="container">
+            <div class="breadcrumb">
+                <a href="{{ url_for('home') }}">Home</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-current">Upload Paper</span>
+            </div>
+            <h1 class="page-title">Upload Question Paper</h1>
+            <p class="page-description">
+                Contribute to our academic community by sharing previous year question papers
+            </p>
+        </div>
+    </section>
+
+    <!-- ==================== UPLOAD SECTION ==================== -->
+    <section class="upload-section">
+        <div class="container">
+            <div class="upload-layout">
+
+                <!-- Upload Form -->
+                <div class="upload-form-wrapper">
+                    <div class="upload-card">
+                        {% if error %}
+                        <div class="error-alert" id="errorAlert">
+                            <strong>Error:</strong> {{ error }}
+                        </div>
+                        {% endif %}
+                        {% with messages = get_flashed_messages() %}
+                        {% if messages %}
+                        <div class="success-alert" id="successAlert">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                            </svg>
+                            <div>
+                                <strong>Success!</strong>
+                                <p>{{ messages[0] }}</p>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="success-alert" id="successAlert" style="display: none;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                            </svg>
+                            <div>
+                                <strong>Success!</strong>
+                                <p>Your question paper has been uploaded successfully and is under review.</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+
+                        <form id="uploadForm" method="POST" action="/upload" enctype="multipart/form-data">
+                            <!-- ROW 1: Department + Subject -->
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label" for="uploadDepartment">
+                                        Department <span class="required">*</span>
+                                    </label>
+                                    <select id="uploadDepartment" name="department" class="form-control" required>
+                                        <option value="">Select Department</option>
+                                        {% for slug, name in departments.items() %}
+                                        <option value="{{ name }}">{{ name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <span class="error-message" id="departmentError"></span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="uploadSubject">
+                                        Subject <span class="required">*</span>
+                                    </label>
+                                    <select id="uploadSubject" name="subject_id" class="form-control" required>
+                                        <option value="">Select Department first</option>
+                                        {% for s in subjects|default([]) %}
+                                        <option value="{{ s.subject_id }}"
+                                                data-department="{{ s.department }}"
+                                                data-semester="{{ s.semester }}">
+                                            {{ s.subject_name }}{% if s.semester %} (Sem {{ s.semester }}){% endif %}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <span class="error-message" id="subjectError"></span>
+                                </div>
+                            </div>
+
+                            <!-- ROW 2: Semester (auto-filled) + Year -->
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label" for="uploadSemester">
+                                        Semester <span class="required">*</span>
+                                        <span style="font-size:.75rem;font-weight:400;color:#6b7280;margin-left:.3rem;">(auto-filled)</span>
+                                    </label>
+                                    <select id="uploadSemester" name="semester" class="form-control" required
+                                            style="background:#f3f4f6;cursor:not-allowed;"
+                                            title="Auto-filled when you pick a subject">
+                                        <option value="">Auto</option>
+                                        <option value="1">Semester 1</option>
+                                        <option value="2">Semester 2</option>
+                                        <option value="3">Semester 3</option>
+                                        <option value="4">Semester 4</option>
+                                        <option value="5">Semester 5</option>
+                                        <option value="6">Semester 6</option>
+                                        <option value="7">Semester 7</option>
+                                        <option value="8">Semester 8</option>
+                                    </select>
+                                    <span class="error-message" id="semesterError"></span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="uploadYear">
+                                        Year <span class="required">*</span>
+                                    </label>
+                                    <select id="uploadYear" name="year" class="form-control" required>
+                                        <option value="">Select Year</option>
+                                        <option value="2021">2021</option>
+                                        <option value="2022">2022</option>
+                                        <option value="2023">2023</option>
+                                        <option value="2024">2024</option>
+                                        <option value="2025">2025</option>
+                                        <option value="2026">2026</option>
+                                    </select>
+                                    <span class="error-message" id="yearError"></span>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="uploadExamType">
+                                    Exam Type <span class="required">*</span>
+                                </label>
+                                <select id="uploadExamType" name="examType" class="form-control" required>
+                                    <option value="">Select Exam Type</option>
+                                    <option value="SEA II">SEA II</option>
+                                    <option value="SEA I">SEA I</option>
+                                    <option value="ISA">ISA</option>
+                                </select>
+                                <span class="error-message" id="examTypeError"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Upload PDF File <span class="required">*</span>
+                                </label>
+                                <div class="file-upload-area" id="fileUploadArea">
+                                    <input type="file" id="uploadFile" name="file" accept=".pdf" required hidden>
+                                    <div class="file-upload-content">
+                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                            <polyline points="17 8 12 3 7 8"></polyline>
+                                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                                        </svg>
+                                        <h4>Click to upload or drag and drop</h4>
+                                        <p>PDF files only (Max size: 10MB)</p>
+                                    </div>
+                                    <div class="file-selected" id="fileSelected" style="display: none;">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                            <polyline points="14 2 14 8 20 8"></polyline>
+                                        </svg>
+                                        <div class="file-info">
+                                            <span class="file-name" id="fileName"></span>
+                                            <span class="file-size" id="fileSize"></span>
+                                        </div>
+                                        <button type="button" class="btn-remove-file" id="removeFile">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <span class="error-message" id="fileError"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="uploadNotes">
+                                    Additional Notes (Optional)
+                                </label>
+                                <textarea id="uploadNotes" name="notes" class="form-control" rows="4" placeholder="Any additional information about this paper..."></textarea>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" onclick="window.location.href='{{ url_for('view_papers') }}'">
+                                    Cancel
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="17 8 12 3 7 8"></polyline>
+                                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                                    </svg>
+                                    Upload Paper
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Guidelines Sidebar -->
+                <div class="guidelines-sidebar">
+                    <div class="guideline-card">
+                        <h3>Upload Guidelines</h3>
+                        <ul class="guideline-list">
+                            <li>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                Only upload authentic question papers
+                            </li>
+                            <li>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                Ensure the PDF is clear and readable
+                            </li>
+                            <li>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                File size should not exceed 10MB
+                            </li>
+                            <li>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                Fill all required fields accurately
+                            </li>
+                            <li>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                Papers will be verified before publishing
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="guideline-card info-card">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
+                        <h4>Need Help?</h4>
+                        <p>If you face any issues while uploading, please contact the academic office or email us at pyqportalhelp@gmail.com</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="mini-footer">
+        <div class="container">
+            <div class="mini-footer-inner">
+                <div class="mini-footer-brand">
+                    <div class="mini-footer-logo">
+                        <svg width="22" height="22" viewBox="0 0 40 40" fill="none">
+                            <defs>
+                                <linearGradient id="fgMark" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="#3B82F6"/>
+                                    <stop offset="100%" stop-color="#8B5CF6"/>
+                                </linearGradient>
+                            </defs>
+                            <path d="M20 10 C14 10 8 12 8 14 L8 30 C8 30 14 28 20 30 Z" fill="url(#fgMark)" opacity="0.9"/>
+                            <path d="M20 10 C26 10 32 12 32 14 L32 30 C32 30 26 28 20 30 Z" fill="url(#fgMark)" opacity="0.6"/>
+                            <line x1="20" y1="10" x2="20" y2="30" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+                            <circle cx="32" cy="10" r="2.5" fill="#F59E0B"/>
+                        </svg>
+                    </div>
+                    <span class="mini-footer-name">PYQ Portal</span>
+                    <span class="mini-footer-sep">·</span>
+                    <span class="mini-footer-copy">© 2026 Marian College Students Council</span>
+                </div>
+                <nav class="mini-footer-nav">
+                    <a href="{{ url_for('view_papers') }}" class="mini-footer-link">Browse</a>
+                    <a href="{{ url_for('about') }}"       class="mini-footer-link">About</a>
+                    <button class="mini-footer-link" onclick="openPopup('help')">Help</button>
+                </nav>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ==================== POPUP ==================== -->
+    <div class="popup-overlay" id="popupOverlay" onclick="closePopup()">
+        <div class="popup-card" onclick="event.stopPropagation()">
+            <div class="popup-header-band"></div>
+            <div class="popup-body">
+                <button class="popup-close" onclick="closePopup()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+                <div class="popup-icon" id="popupIcon"></div>
+                <h3 class="popup-title" id="popupTitle"></h3>
+                <p class="popup-desc" id="popupDesc"></p>
+                <a class="popup-mail-btn" id="popupMailBtn" href="mailto:pyqportalhelp@gmail.com">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                        <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    <span id="popupMailLabel">pyqportalhelp@gmail.com</span>
+                </a>
+                <p class="popup-tagline">We usually respond within 24 hours</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="{{ url_for('static', filename='uploadjs.js') }}"></script>
+</body>
+</html>
