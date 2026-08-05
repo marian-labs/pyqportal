@@ -5,16 +5,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        PORT: ${PORT:-8000}
     container_name: pyq_hostinger_app
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:${PORT:-8000}"
     env_file:
       - .env
     environment:
-      - PORT=8000
+      - PORT=${PORT:-8000}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:${PORT:-8000}/"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -1,10 +1,13 @@
 # Use official lightweight Python image
 FROM python:3.11-slim
 
+# Allow setting port at build time, defaulting to 8000
+ARG PORT=8000
+
 # Prevent Python from writing pyc files and buffering stdout/stderr
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8000
+    PORT=${PORT}
 
 # Set working directory
 WORKDIR /app
@@ -25,12 +28,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source code
 COPY . .
 
-# Expose port 8000
-EXPOSE 8000
+# Expose port (dynamically configured via PORT variable)
+EXPOSE ${PORT}
 
 # Health check to monitor internal container process health
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://127.0.0.1:${PORT:-8000}/ || exit 1
+    CMD curl -f http://127.0.0.1:${PORT}/ || exit 1
 
 # Run application with Gunicorn
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 4 --timeout 120 app:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --workers 2 --threads 4 --timeout 120 app:app"]
