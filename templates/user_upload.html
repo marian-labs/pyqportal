@@ -25,7 +25,7 @@
         /* ── PAGE HEADER ── */
         .up-page-header {
             text-align: center;
-            max-width: 860px;
+            max-width: 1200px;
             width: 100%;
             margin-bottom: 2rem;
         }
@@ -70,7 +70,7 @@
         /* ── ALERTS ── */
         .up-alert {
             width: 100%;
-            max-width: 860px;
+            max-width: 1200px;
             border-radius: 12px;
             padding: .9rem 1.2rem;
             font-size: .9rem;
@@ -92,10 +92,10 @@
         /* ── TWO-COLUMN WRAPPER ── */
         .up-two-col {
             width: 100%;
-            max-width: 900px;
+            max-width: 1200px;
             display: grid;
-            grid-template-columns: 1fr 340px;
-            gap: 1.5rem;
+            grid-template-columns: 1fr 380px;
+            gap: 1.75rem;
             align-items: start;
         }
 
@@ -396,12 +396,12 @@
     <header class="main-header">
         <div class="container-fluid">
             <div class="unified-header">
-                <div class="college-brand">
+                <a href="{{ url_for('home') }}" class="college-brand" style="text-decoration:none;">
                     <img src="{{ url_for('static', filename='mcsc_logo.webp') }}"
                         alt="MCSC Marian College Students Council" class="college-logo">
-                </div>
+                </a>
 
-                <div class="portal-brand">
+                <a href="{{ url_for('home') }}" class="portal-brand" style="text-decoration:none;">
                     <div class="portal-logo">
                         <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <defs>
@@ -421,7 +421,7 @@
                         <h1 class="portal-title">PYQ Portal</h1>
                         <p class="portal-subtitle">Previous Year Question Papers</p>
                     </div>
-                </div>
+                </a>
 
                 <div class="header-actions">
                     <nav class="main-nav">
@@ -445,7 +445,11 @@
                         </button>
                         {% if session.get('user_id') %}
                         <div class="user-menu desktop-only">
+                            {% if session.get('role') == 'admin' %}
+                            <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="user-name" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.username }}</a>
+                            {% else %}
                             <span class="user-name">{{ session.username }}</span>
+                            {% endif %}
                             <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
                         </div>
                         {% else %}
@@ -472,7 +476,11 @@
                     <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
                     {% if session.get('user_id') %}
                     <hr class="mobile-nav-divider">
+                    {% if session.get('role') == 'admin' %}
+                    <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="mobile-nav-user" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.username }}</a>
+                    {% else %}
                     <span class="mobile-nav-user">{{ session.username }}</span>
+                    {% endif %}
                     <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
                     {% else %}
                     <hr class="mobile-nav-divider">
@@ -487,8 +495,10 @@
     <div class="upload-page-wrap">
 
         <div class="up-page-header">
-            <div class="up-badge">
-                Community Contribution
+            <div class="breadcrumb" style="justify-content: center; margin-bottom: 1rem;">
+                <a href="{{ url_for('home') }}">Home</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-current">Upload Paper</span>
             </div>
             <h1>Submit a <span>Question Paper</span></h1>
             <p>Help your classmates prepare better. Upload any previous year paper — our team reviews it before it goes live.</p>

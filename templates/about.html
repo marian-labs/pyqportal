@@ -24,13 +24,13 @@
         <div class="container-fluid">
             <div class="unified-header">
                 <!-- Left: College Branding -->
-                <div class="college-brand">
+                <a href="{{ url_for('home') }}" class="college-brand" style="text-decoration:none;">
                     <img src="{{ url_for('static', filename='mcsc_logo.webp') }}"
                         alt="MCSC Marian College Students Council" class="college-logo">
-                </div>
+                </a>
 
                 <!-- Center: Portal Branding -->
-                <div class="portal-brand">
+                <a href="{{ url_for('home') }}" class="portal-brand" style="text-decoration:none;">
                     <div class="portal-logo">
                         <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <defs>
@@ -56,7 +56,7 @@
                         <h1 class="portal-title">PYQ Portal</h1>
                         <p class="portal-subtitle">Previous Year Question Papers</p>
                     </div>
-                </div>
+                </a>
 
                 <!-- Right: Navigation & Actions -->
                 <div class="header-actions">
@@ -83,7 +83,11 @@
 
                         {% if session.get('user_id') %}
                         <div class="user-menu desktop-only">
+                            {% if session.get('role') == 'admin' %}
+                            <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="user-name" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.username }}</a>
+                            {% else %}
                             <span class="user-name">{{ session.username }}</span>
+                            {% endif %}
                             <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
                         </div>
                         {% else %}
@@ -114,7 +118,11 @@
                     <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
                     {% if session.get('user_id') %}
                     <hr class="mobile-nav-divider">
+                    {% if session.get('role') == 'admin' %}
+                    <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="mobile-nav-user" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.username }}</a>
+                    {% else %}
                     <span class="mobile-nav-user">{{ session.username }}</span>
+                    {% endif %}
                     <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
                     {% else %}
                     <hr class="mobile-nav-divider">

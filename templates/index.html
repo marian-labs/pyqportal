@@ -30,13 +30,13 @@
         <div class="container-fluid">
             <div class="unified-header">
                 <!-- Left: College Branding -->
-                <div class="college-brand">
+                <a href="{{ url_for('home') }}" class="college-brand" style="text-decoration:none;">
                     <img src="{{ url_for('static', filename='mcsc_logo.webp') }}"
                         alt="MCSC Marian College Students Council" class="college-logo">
-                </div>
+                </a>
 
                 <!-- Center: Portal Branding -->
-                <div class="portal-brand">
+                <a href="{{ url_for('home') }}" class="portal-brand" style="text-decoration:none;">
                     <div class="portal-logo">
                         <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <defs>
@@ -62,7 +62,7 @@
                         <h1 class="portal-title">PYQ Portal</h1>
                         <p class="portal-subtitle">Previous Year Question Papers</p>
                     </div>
-                </div>
+                </a>
 
                 <!-- Right: Navigation & Actions -->
                 <div class="header-actions">
@@ -89,7 +89,13 @@
 
                         {% if session.get('user_id') %}
                         <div class="user-menu desktop-only">
+                            {% if session.get('role') == 'admin' %}
+                            <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer"
+                                class="user-name" style="text-decoration:none; color:#ffffff;"
+                                title="Open Admin Panel in new tab">{{ session.username }}</a>
+                            {% else %}
                             <span class="user-name">{{ session.username }}</span>
+                            {% endif %}
                             <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
                         </div>
                         {% else %}
@@ -120,7 +126,13 @@
                     <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
                     {% if session.get('user_id') %}
                     <hr class="mobile-nav-divider">
+                    {% if session.get('role') == 'admin' %}
+                    <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer"
+                        class="mobile-nav-user" style="text-decoration:none; color:#ffffff;"
+                        title="Open Admin Panel in new tab">{{ session.username }}</a>
+                    {% else %}
                     <span class="mobile-nav-user">{{ session.username }}</span>
+                    {% endif %}
                     <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
                     {% else %}
                     <hr class="mobile-nav-divider">
@@ -199,7 +211,7 @@
     </section>
     <!-- ==================== ANNOUNCEMENT BANNER ==================== -->
     <div class="announcement-banner" id="announcementBanner">
-        <span>🎓 New papers elm loading makkaleee... <br>
+        <span>New papers elm loading makkaleee... <br>
             puthye sem nammk tookkam...😎✌️</span>
         <button onclick="document.getElementById('announcementBanner').style.display='none'">✕</button>
     </div>
@@ -213,16 +225,87 @@
             </div>
 
             <div class="departments-grid">
+                {% set color_palette = [
+                '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899',
+                '#06b6d4', '#6366f1', '#f97316', '#14b8a6', '#a855f7'
+                ] %}
                 {% for dept in departments %}
+                {% set main_color = color_palette[loop.index0 % color_palette|length] %}
                 {% if dept.is_coming_soon or dept.paper_count == 0 %}
                 <div class="dept-card dept-coming-soon reveal">
-                    <span class="dept-icon">{{ dept.icon }}</span>
+                    <div class="dept-icon-folder"
+                        style="display: flex; justify-content: center; align-items: center; margin-bottom: 0.75rem;">
+                        <svg width="48" height="48" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="folderGradHome{{ loop.index }}" x1="0" y1="0" x2="56" y2="56"
+                                    gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="{{ main_color }}" stop-opacity="0.95" />
+                                    <stop offset="100%" stop-color="{{ main_color }}" stop-opacity="0.75" />
+                                </linearGradient>
+                                <filter id="folderShadowHome{{ loop.index }}" x="-10%" y="-10%" width="130%"
+                                    height="130%">
+                                    <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{{ main_color }}"
+                                        flood-opacity="0.3" />
+                                </filter>
+                            </defs>
+                            <path
+                                d="M6 14C6 10.6863 8.68629 8 12 8H22C24.1217 8 26.0717 9.11719 27.1213 10.9531L28.8787 14.0469C29.9283 15.8828 31.8783 17 34 17H44C47.3137 17 50 19.6863 50 23V42C50 45.3137 47.3137 48 44 48H12C8.68629 48 6 45.3137 6 42V14Z"
+                                fill="url(#folderGradHome{{ loop.index }})" opacity="0.6" />
+                            <rect x="14" y="16" width="28" height="24" rx="3" fill="#FFFFFF" opacity="0.9" />
+                            <line x1="18" y1="22" x2="32" y2="22" stroke="#94A3B8" stroke-width="2"
+                                stroke-linecap="round" />
+                            <line x1="18" y1="27" x2="36" y2="27" stroke="#CBD5E1" stroke-width="2"
+                                stroke-linecap="round" />
+                            <line x1="18" y1="32" x2="28" y2="32" stroke="#CBD5E1" stroke-width="2"
+                                stroke-linecap="round" />
+                            <path
+                                d="M6 24C6 20.6863 8.68629 18 12 18H44C47.3137 18 50 20.6863 50 24V42C50 45.3137 47.3137 48 44 48H12C8.68629 48 6 45.3137 6 42V24Z"
+                                fill="url(#folderGradHome{{ loop.index }})"
+                                filter="url(#folderShadowHome{{ loop.index }})" />
+                            <path
+                                d="M12 19H44C46.7614 19 49 21.2386 49 24V25C49 22.2386 46.7614 20 44 20H12C9.23858 20 7 22.2386 7 25V24C7 21.2386 9.23858 19 12 19Z"
+                                fill="#FFFFFF" opacity="0.4" />
+                        </svg>
+                    </div>
                     <h3 class="dept-name">{{ dept.name }}</h3>
                     <p class="dept-soon-badge">Coming Soon</p>
                 </div>
                 {% else %}
                 <a href="{{ url_for('view_papers_by_department', department=dept.slug) }}" class="dept-card reveal">
-                    <span class="dept-icon">{{ dept.icon }}</span>
+                    <div class="dept-icon-folder"
+                        style="display: flex; justify-content: center; align-items: center; margin-bottom: 0.75rem;">
+                        <svg width="48" height="48" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="folderGradHome{{ loop.index }}" x1="0" y1="0" x2="56" y2="56"
+                                    gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="{{ main_color }}" stop-opacity="0.95" />
+                                    <stop offset="100%" stop-color="{{ main_color }}" stop-opacity="0.75" />
+                                </linearGradient>
+                                <filter id="folderShadowHome{{ loop.index }}" x="-10%" y="-10%" width="130%"
+                                    height="130%">
+                                    <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{{ main_color }}"
+                                        flood-opacity="0.3" />
+                                </filter>
+                            </defs>
+                            <path
+                                d="M6 14C6 10.6863 8.68629 8 12 8H22C24.1217 8 26.0717 9.11719 27.1213 10.9531L28.8787 14.0469C29.9283 15.8828 31.8783 17 34 17H44C47.3137 17 50 19.6863 50 23V42C50 45.3137 47.3137 48 44 48H12C8.68629 48 6 45.3137 6 42V14Z"
+                                fill="url(#folderGradHome{{ loop.index }})" opacity="0.6" />
+                            <rect x="14" y="16" width="28" height="24" rx="3" fill="#FFFFFF" opacity="0.9" />
+                            <line x1="18" y1="22" x2="32" y2="22" stroke="#94A3B8" stroke-width="2"
+                                stroke-linecap="round" />
+                            <line x1="18" y1="27" x2="36" y2="27" stroke="#CBD5E1" stroke-width="2"
+                                stroke-linecap="round" />
+                            <line x1="18" y1="32" x2="28" y2="32" stroke="#CBD5E1" stroke-width="2"
+                                stroke-linecap="round" />
+                            <path
+                                d="M6 24C6 20.6863 8.68629 18 12 18H44C47.3137 18 50 20.6863 50 24V42C50 45.3137 47.3137 48 44 48H12C8.68629 48 6 45.3137 6 42V24Z"
+                                fill="url(#folderGradHome{{ loop.index }})"
+                                filter="url(#folderShadowHome{{ loop.index }})" />
+                            <path
+                                d="M12 19H44C46.7614 19 49 21.2386 49 24V25C49 22.2386 46.7614 20 44 20H12C9.23858 20 7 22.2386 7 25V24C7 21.2386 9.23858 19 12 19Z"
+                                fill="#FFFFFF" opacity="0.4" />
+                        </svg>
+                    </div>
                     <h3 class="dept-name">{{ dept.name }}</h3>
                     <p class="dept-count">{{ dept.paper_count }} Paper{% if dept.paper_count != 1 %}s{% endif %}</p>
                 </a>
@@ -230,7 +313,7 @@
                 {% endfor %}
             </div>
 
-            <p class="dept-more-note reveal">More departments being added soon — stay tuned! 🚀</p>
+            <p class="dept-more-note reveal">More departments being added soon — stay tuned!</p>
         </div>
     </section>
 
@@ -393,35 +476,45 @@
     <!-- ==================== END CONTRIBUTE SECTION ==================== -->
 
     <!-- ==================== CTA SECTION ==================== -->
-    <section class="cta-section" style="padding: 2.25rem 0 !important; background: linear-gradient(135deg, var(--primary-blue, #2563eb) 0%, var(--primary-purple, #7c3aed) 100%);">
+    <section class="cta-section"
+        style="padding: 2.25rem 0 !important; background: linear-gradient(135deg, var(--primary-blue, #2563eb) 0%, var(--primary-purple, #7c3aed) 100%);">
         <div class="container">
-            <div class="cta-content reveal" style="display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap;">
-                
+            <div class="cta-content reveal"
+                style="display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap;">
+
                 <!-- Left Title -->
                 <div style="flex: 1; min-width: 240px;">
-                    <span style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #bfdbfe; display: block; margin-bottom: 0.25rem;">
+                    <span
+                        style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #bfdbfe; display: block; margin-bottom: 0.25rem;">
                         PYQ Portal
                     </span>
-                    <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 1.65rem; font-weight: 800; color: #ffffff; margin: 0; line-height: 1.25;">
+                    <h2
+                        style="font-family: 'Space Grotesk', sans-serif; font-size: 1.65rem; font-weight: 800; color: #ffffff; margin: 0; line-height: 1.25;">
                         Exam season?<br><span style="color: #fef08a;">We got you...!</span>
                     </h2>
                 </div>
 
                 <!-- Right Points Badges / Grid -->
-                <div style="flex: 2; min-width: 300px; display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center;">
-                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
+                <div
+                    style="flex: 2; min-width: 300px; display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center;">
+                    <span
+                        style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
                         📄 Previous year question papers
                     </span>
-                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
+                    <span
+                        style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
                         🎓 All semesters covered
                     </span>
-                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
+                    <span
+                        style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
                         📝 SEA I, SEA II, ISA papers
                     </span>
-                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
+                    <span
+                        style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
                         🔓 No login needed
                     </span>
-                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(99,102,241,0.22); border: 1px solid rgba(165,180,252,0.35); color: #ffffff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 700;">
+                    <span
+                        style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(99,102,241,0.22); border: 1px solid rgba(165,180,252,0.35); color: #ffffff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 700;">
                         ✨ AI-powered question analysis
                     </span>
                 </div>

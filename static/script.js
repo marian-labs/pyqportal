@@ -214,19 +214,19 @@ if (document.getElementById('semFolders')) {
 
     btnBackFolders.addEventListener('click', goBackInBrowse);
 
-    // ---- Floating back button (mobile scroll) ----
+    // ---- Floating back button (optional null check) ----
     const btnBackFloat = document.getElementById('btnBackFloat');
-
-    btnBackFloat.addEventListener('click', goBackInBrowse);
-
-    window.addEventListener('scroll', () => {
-        if (folderPapersView.style.display === 'none') {
-            btnBackFloat.classList.remove('visible');
-            return;
-        }
-        const rect = btnBackFolders.getBoundingClientRect();
-        btnBackFloat.classList.toggle('visible', rect.bottom < 0);
-    }, { passive: true });
+    if (btnBackFloat) {
+        btnBackFloat.addEventListener('click', goBackInBrowse);
+        window.addEventListener('scroll', () => {
+            if (folderPapersView.style.display === 'none') {
+                btnBackFloat.classList.remove('visible');
+                return;
+            }
+            const rect = btnBackFolders.getBoundingClientRect();
+            btnBackFloat.classList.toggle('visible', rect.bottom < 0);
+        }, { passive: true });
+    }
 
     // ---- Render papers (folder/exam-type driven, no legacy filter dropdowns) ----
     function renderPapers(forceType) {

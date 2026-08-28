@@ -68,10 +68,28 @@
         /* ── Department grid ── */
         .dept-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(4, 1fr);
             gap: 1.5rem;
             width: 100%;
-            max-width: 860px;
+            max-width: 1200px;
+        }
+
+        @media (max-width: 1024px) {
+            .dept-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dept-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .dept-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .dept-folder-card {
@@ -111,7 +129,12 @@
 
         .dept-folder-icon {
             width: 64px;
-            height: 64px;
+            height: 56px;
+            transition: transform .2s ease;
+        }
+
+        .dept-folder-card:hover .dept-folder-icon {
+            transform: scale(1.08) translateY(-2px);
         }
 
         .dept-folder-name {
@@ -142,18 +165,12 @@
             transform: translateX(0);
         }
 
-        /* colour accents per dept */
-        .dept-card-bca    { --dc: #3b82f6; }
-        .dept-card-bba    { --dc: #8b5cf6; }
-        .dept-card-bcom   { --dc: #10b981; }
-        .dept-card-bscmath{ --dc: #f59e0b; }
-
         .dept-folder-card:hover .dept-folder-name { color: var(--dc, #3b82f6); }
 
         @media (max-width: 480px) {
             .dept-grid { grid-template-columns: 1fr 1fr; gap: 1rem; }
             .dept-folder-card { padding: 1.5rem 1rem 1.25rem; }
-            .dept-folder-icon { width: 48px; height: 48px; }
+            .dept-folder-icon { width: 52px; height: 46px; }
         }
     </style>
 </head>
@@ -163,12 +180,12 @@
     <header class="main-header">
         <div class="container-fluid">
             <div class="unified-header">
-                <div class="college-brand">
+                <a href="{{ url_for('home') }}" class="college-brand" style="text-decoration:none;">
                     <img src="{{ url_for('static', filename='mcsc_logo.webp') }}"
                          alt="MCSC Marian College Students Council" class="college-logo">
-                </div>
+                </a>
 
-                <div class="portal-brand">
+                <a href="{{ url_for('home') }}" class="portal-brand" style="text-decoration:none;">
                     <div class="portal-logo">
                         <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <defs>
@@ -188,7 +205,7 @@
                         <h1 class="portal-title">PYQ Portal</h1>
                         <p class="portal-subtitle">Previous Year Question Papers</p>
                     </div>
-                </div>
+                </a>
 
                 <div class="header-actions">
                     <nav class="main-nav">
@@ -212,7 +229,11 @@
 
                         {% if session.get('user_id') %}
                         <div class="user-menu desktop-only">
+                            {% if session.get('role') == 'admin' %}
+                            <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="user-name" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.username }}</a>
+                            {% else %}
                             <span class="user-name">{{ session.username }}</span>
+                            {% endif %}
                             <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
                         </div>
                         {% else %}
@@ -239,7 +260,11 @@
                     <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
                     {% if session.get('user_id') %}
                     <hr class="mobile-nav-divider">
+                    {% if session.get('role') == 'admin' %}
+                    <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="mobile-nav-user" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.username }}</a>
+                    {% else %}
                     <span class="mobile-nav-user">{{ session.username }}</span>
+                    {% endif %}
                     <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
                     {% else %}
                     <hr class="mobile-nav-divider">
@@ -254,44 +279,59 @@
     <div class="dept-home-wrap">
 
         <div class="dept-home-header">
+            <div class="breadcrumb" style="justify-content: center; margin-bottom: 1rem;">
+                <a href="{{ url_for('home') }}">Home</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-current">Browse Papers</span>
+            </div>
             <h1>Browse by <span>Department</span></h1>
             <p>Select your department to explore semester folders and previous year question papers.</p>
         </div>
 
         <div class="dept-grid">
+            {% set color_palette = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1', '#f97316', '#14b8a6', '#a855f7'] %}
             {% set dept_meta = {
-                'bca':      {'label': 'Bachelor of Computer Applications', 'class': 'dept-card-bca',     'fill': '#3b82f6'},
-                'bba':      {'label': 'Bachelor of Business Administration','class': 'dept-card-bba',     'fill': '#8b5cf6'},
-                'bcom':     {'label': 'Bachelor of Commerce',              'class': 'dept-card-bcom',    'fill': '#10b981'},
-                'bsc-math': {'label': 'Bachelor of Science — Mathematics', 'class': 'dept-card-bscmath','fill': '#f59e0b'},
-                'msc-physics': {'label': 'Master of Science — Physics',    'class': 'dept-card-bca',     'fill': '#ec4899'}
+                'bca':      {'label': 'Bachelor of Computer Applications', 'color': '#3b82f6'},
+                'bba':      {'label': 'Bachelor of Business Administration','color': '#8b5cf6'},
+                'bcom':     {'label': 'Bachelor of Commerce',              'color': '#10b981'},
+                'bsc-math': {'label': 'Bachelor of Science — Mathematics', 'color': '#f59e0b'},
+                'msc-physics': {'label': 'Master of Science — Physics',    'color': '#ec4899'}
             } %}
 
             {% for dept in departments %}
             {% set slug = dept.slug if dept.slug is defined else dept %}
             {% set name = dept.name if dept.name is defined else departments[dept] %}
-            {% set meta = dept_meta.get(slug, {'label': dept.description if dept.description is defined and dept.description else name, 'class': 'dept-card-bca', 'fill': '#3b82f6'}) %}
-            <a href="{{ url_for('view_papers_by_department', department=slug) }}"
-               class="dept-folder-card {{ meta.class }}">
+            {% set default_color = color_palette[loop.index0 % color_palette|length] %}
+            {% set meta = dept_meta.get(slug, {}) %}
+            {% set label_str = meta.label if meta.label is defined else (dept.description if dept.description is defined and dept.description else name) %}
+            {% set fill_color = meta.color if meta.color is defined else default_color %}
 
-                <!-- Folder SVG coloured per dept -->
+            <a href="{{ url_for('view_papers_by_department', department=slug) }}"
+               class="dept-folder-card" style="--dc: {{ fill_color }};">
+
+                <!-- Standard Premium Folder SVG -->
                 <svg class="dept-folder-icon" viewBox="0 0 64 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="0" y="10" width="64" height="42" rx="6"
-                          fill="{{ meta.fill }}" opacity="0.15"/>
-                    <rect x="0" y="16" width="64" height="36" rx="6"
-                          fill="{{ meta.fill }}" opacity="0.2"/>
-                    <rect x="2" y="8"  width="26" height="10" rx="4"
-                          fill="{{ meta.fill }}" opacity="0.35"/>
-                    <rect x="6" y="24" width="52" height="4" rx="2"
-                          fill="{{ meta.fill }}" opacity="0.5"/>
-                    <rect x="6" y="32" width="40" height="4" rx="2"
-                          fill="{{ meta.fill }}" opacity="0.35"/>
-                    <rect x="6" y="40" width="46" height="4" rx="2"
-                          fill="{{ meta.fill }}" opacity="0.25"/>
+                    <defs>
+                        <linearGradient id="folderGrad_{{ loop.index }}" x1="0" y1="0" x2="64" y2="56" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stop-color="{{ fill_color }}"/>
+                            <stop offset="100%" stop-color="{{ fill_color }}" stop-opacity="0.8"/>
+                        </linearGradient>
+                        <filter id="folderShadow_{{ loop.index }}" x="-10%" y="-10%" width="125%" height="125%">
+                            <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="{{ fill_color }}" flood-opacity="0.25"/>
+                        </filter>
+                    </defs>
+                    <!-- Back folder tab -->
+                    <path d="M4 14C4 10.6863 6.68629 8 10 8H22C24.2091 8 26.2426 8.97056 27.6569 10.5147L29.5 12.5H54C57.3137 12.5 60 15.1863 60 18.5V42C60 45.3137 57.3137 48 54 48H10C6.68629 48 4 45.3137 4 42V14Z" fill="{{ fill_color }}" opacity="0.4"/>
+                    <!-- Paper insert preview -->
+                    <rect x="12" y="16" width="40" height="24" rx="4" fill="#FFFFFF" opacity="0.95"/>
+                    <line x1="18" y1="23" x2="36" y2="23" stroke="{{ fill_color }}" stroke-width="2.5" stroke-linecap="round" opacity="0.75"/>
+                    <line x1="18" y1="29" x2="30" y2="29" stroke="{{ fill_color }}" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+                    <!-- Front cover flap -->
+                    <path d="M4 22C4 18.6863 6.68629 16 10 16H54C57.3137 16 60 18.6863 60 22V42C60 45.3137 57.3137 48 54 48H10C6.68629 48 4 45.3137 4 42V22Z" fill="url(#folderGrad_{{ loop.index }})" filter="url(#folderShadow_{{ loop.index }})"/>
                 </svg>
 
                 <div class="dept-folder-name">{{ name }}</div>
-                <div class="dept-folder-label">{{ meta.label }}</div>
+                <div class="dept-folder-label">{{ label_str }}</div>
                 {% if dept.paper_count is defined and dept.paper_count > 0 %}
                 <span style="font-size:0.75rem; color:#6b7280; margin-top:4px;">{{ dept.paper_count }} Paper{% if dept.paper_count != 1 %}s{% endif %}</span>
                 {% elif dept.is_coming_soon is defined and dept.is_coming_soon %}
