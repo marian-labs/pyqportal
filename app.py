@@ -15,6 +15,7 @@ from flask_compress import Compress
 from supabase import create_client
 from authlib.integrations.flask_client import OAuth
 from psycopg2.extras import execute_values
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 PDF_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", "papers")
 os.makedirs(PDF_CACHE_DIR, exist_ok=True)
@@ -37,6 +38,7 @@ from models import (
 )
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.secret_key = config.SECRET_KEY
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
@@ -90,8 +92,18 @@ def apply_security_headers(response):
     return response
 
 client = genai.Client(api_key=config.GEMINI_API_KEY)
+
+def get_user_rate_limit_key():
+    """Rate limit per authenticated student account. Falls back to real IP if not logged in."""
+    try:
+        if session and session.get("user_id"):
+            return f"user:{session.get('user_id')}"
+    except Exception:
+        pass
+    return f"ip:{get_remote_address()}"
+
 limiter = Limiter(
-    get_remote_address,
+    get_user_rate_limit_key,
     app=app,
     default_limits=[],
     storage_uri="memory://"
@@ -550,15 +562,15 @@ def analyze_paper(paper_id):
                 "cached": True
             })
 
-        # 2. RATE LIMIT CHECK (ONLY FOR NEW ANALYSIS)
-        user_ip = request.remote_addr
+        # 2. RATE LIMIT CHECK (ONLY FOR NEW ANALYSIS - per user account)
+        user_key = get_user_rate_limit_key()
         now = time.time()
 
-        request_log.setdefault(user_ip, [])
-        request_log[user_ip] = [
-            t for t in request_log[user_ip] if now - t < 3600]
+        request_log.setdefault(user_key, [])
+        request_log[user_key] = [
+            t for t in request_log[user_key] if now - t < 3600]
 
-        if len(request_log[user_ip]) >= 5:
+        if len(request_log[user_key]) >= 5:
             return jsonify({
                 "error": "Too many requests. You can analyse only 3 papers per hour. Please try later."
             }), 429
@@ -566,7 +578,7 @@ def analyze_paper(paper_id):
         # 3. CALL GEMINI
         try:
             predictions = analyze_with_gemini(file_url, subject_name)
-            request_log[user_ip].append(now)
+            request_log[user_key].append(now)
         except Exception as e:
             app.logger.exception("Gemini analysis failed: %s", str(e))
             err = str(e).lower()
@@ -621,7 +633,7 @@ def analyze_paper(paper_id):
 
 @app.route("/user-upload", methods=["GET", "POST"])
 @login_required
-@limiter.limit("5 per hour")
+@limiter.limit("5 per hour", methods=["POST"], key_func=get_user_rate_limit_key)
 def user_upload():
     departments_list = get_departments(active_only=True)
     depts_dict = get_departments_dict(departments_list)
