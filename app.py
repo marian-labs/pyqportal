@@ -277,7 +277,7 @@ Respond with:
 
 
 @app.route("/login")
-@limiter.limit("20 per minute")
+@limiter.limit("200 per minute")
 def login():
     """Login navbar button target — immediately kicks off Google OAuth, no intermediate page."""
     # If there's a ?next= param (e.g. from an old email link), preserve it
@@ -288,14 +288,14 @@ def login():
 
 
 @app.route("/login/google")
-@limiter.limit("20 per minute")
+@limiter.limit("200 per minute")
 def login_google():
     redirect_uri = url_for("google_callback", _external=True)
     return google.authorize_redirect(redirect_uri, hd=config.GOOGLE_ALLOWED_DOMAIN)
 
 
 @app.route("/login/google/callback")
-@limiter.limit("20 per minute")
+@limiter.limit("200 per minute")
 def google_callback():
     try:
         token = google.authorize_access_token()
