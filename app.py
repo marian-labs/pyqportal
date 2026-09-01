@@ -970,20 +970,52 @@ def refresh_analysis(paper_id):
         cur.close()
         return_db(conn)
 
+@app.route("/paper/<int:paper_id>/view")
+@app.route("/paper/<int:paper_id>/download")
 @app.route("/download/<int:paper_id>")
 @login_required
-def download_paper(paper_id):
+def serve_paper(paper_id):
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT file_url FROM question_papers WHERE paper_id = %s",
+            """
+            SELECT q.file_url, q.file_name, s.subject_name, q.year
+            FROM question_papers q
+            JOIN subjects s ON q.subject_id = s.subject_id
+            WHERE q.paper_id = %s
+            """,
             (paper_id,)
         )
         row = cur.fetchone()
-        if not row:
-            return "Paper not found", 404
-        return redirect(row[0])
+        if not row or not row[0]:
+            flash("Question paper not found.", "error")
+            return redirect(url_for("home"))
+
+        file_url, file_name, subject_name, year = row[0], row[1], row[2], row[3]
+        safe_name = secure_filename(f"{subject_name}_{year}.pdf") or file_name or "paper.pdf"
+
+        # Stream from Supabase securely via backend
+        r = requests.get(file_url, timeout=30, stream=True)
+        r.raise_for_status()
+
+        from flask import Response, stream_with_context
+        content_type = r.headers.get('Content-Type', 'application/pdf')
+        is_download = request.path.endswith('/download') or request.args.get('download') is not None
+        disposition = f'attachment; filename="{safe_name}"' if is_download else f'inline; filename="{safe_name}"'
+
+        return Response(
+            stream_with_context(r.iter_content(chunk_size=65536)),
+            content_type=content_type,
+            headers={
+                'Content-Disposition': disposition,
+                'Cache-Control': 'private, max-age=3600',
+            }
+        )
+    except Exception as e:
+        app.logger.exception("Failed to serve paper %s: %s", paper_id, str(e))
+        flash("Could not load paper. Please try again.", "error")
+        return redirect(url_for("home"))
     finally:
         cur.close()
         return_db(conn)
@@ -1411,7 +1443,7 @@ def admin_get_papers():
                 "semester": sem,
                 "year": yr,
                 "exam_type": ex_type,
-                "file_url": file_url,
+                "file_url": f"/paper/{paper_id}/view",
                 "upload_date": up_date.isoformat() if up_date else None,
                 "ai_analysis": ai_an,
                 "public_id": pub_id,

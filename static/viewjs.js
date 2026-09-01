@@ -100,7 +100,8 @@ function showToast(message, duration = 3000) {
 function forceDownload(url, filename, silent = false) {
     if (!silent) showToast('⬇️ Downloading… please wait');
     const a = document.createElement('a');
-    a.href = url + '?download=';
+    const dlUrl = url.includes('/download') ? url : (url.replace('/view', '/download') + (url.includes('?') ? '&' : '?') + 'download=1');
+    a.href = dlUrl;
     a.download = filename || 'question-paper.pdf';
     document.body.appendChild(a);
     a.click();

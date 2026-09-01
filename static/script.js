@@ -423,9 +423,10 @@ window.closeAnalyseModal = function() {
         const fetchPromises = semPapers.map(async (p) => {
             const filename = `${sanitizeFilename(p.subject)}_${sanitizeFilename(p.examType || 'paper')}_${p.year}.pdf`;
             try {
-                // Use /proxy-pdf to avoid CORS/CSP block on direct Supabase fetch
-                const proxyUrl = '/proxy-pdf?url=' + encodeURIComponent(p.file_url);
-                const res = await fetch(proxyUrl, { headers: { 'Accept': 'application/json' } });
+                const targetUrl = (p.file_url && p.file_url.startsWith('http'))
+                    ? ('/proxy-pdf?url=' + encodeURIComponent(p.file_url))
+                    : (p.file_url || ('/paper/' + p.paper_id + '/view'));
+                const res = await fetch(targetUrl);
                 if (res.status === 401) {
                     window.location.href = '/login?next=' + encodeURIComponent(window.location.href);
                     return;

@@ -393,8 +393,8 @@ def get_department_papers(department_slug_or_name):
                 "semester": semester,
                 "department": dept or "",
                 "examType": exam_type or "—",
-                "file_url": file_url,
-                "download_url": (file_url + "?download=") if file_url else None,
+                "file_url": f"/paper/{paper_id}/view",
+                "download_url": f"/paper/{paper_id}/download",
                 "paper_id": paper_id,
                 "is_analysed": is_analysed,
             })
@@ -440,8 +440,8 @@ def get_department_papers_and_subjects(department_slug):
                 "semester": semester,
                 "department": dept or "",
                 "examType": exam_type or "—",
-                "file_url": file_url,
-                "download_url": (file_url + "?download=") if file_url else None,
+                "file_url": f"/paper/{paper_id}/view",
+                "download_url": f"/paper/{paper_id}/download",
                 "paper_id": paper_id,
                 "is_analysed": is_analysed,
             })
