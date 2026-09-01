@@ -1,78 +1,92 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort
 import os
-import psycopg2
+import re
 import time
-from psycopg2 import pool
-from supabase import create_client
 from werkzeug.utils import secure_filename
-from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import uuid
 import requests
-from dotenv import load_dotenv
+from datetime import timedelta
 from google import genai
 from google.genai import types
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_compress import Compress
+from supabase import create_client
+from authlib.integrations.flask_client import OAuth
 from psycopg2.extras import execute_values
 
-_DEPARTMENTS_CACHE = {}
-_CACHE_TTL = 60
-_CONN_IDLE_TIMEOUT = 30
-_conn_last_used = {}
+import config
+from models import (
+    get_db,
+    return_db,
+    init_db,
+    clear_departments_cache,
+    get_departments,
+    get_department_by_slug,
+    get_departments_dict,
+    is_valid_department,
+    get_department_id_by_name_or_slug,
+    auto_remove_department_coming_soon,
+    get_subjects,
+    get_department_papers,
+    get_department_papers_and_subjects,
+)
 
-load_dotenv()
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY')
+app.secret_key = config.SECRET_KEY
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=(config.FLASK_ENV != "development"),
+    SESSION_COOKIE_SAMESITE="Lax",
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+    SESSION_REFRESH_EACH_REQUEST=True,
+    SEND_FILE_MAX_AGE_DEFAULT=timedelta(days=7),
+    COMPRESS_MIMETYPES=[
+        "text/html",
+        "text/css",
+        "text/xml",
+        "application/json",
+        "application/javascript",
+        "image/svg+xml",
+    ],
+    COMPRESS_LEVEL=6,
+    COMPRESS_MIN_SIZE=500,
+)
 Compress(app)
+
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=config.GOOGLE_CLIENT_ID,
+    client_secret=config.GOOGLE_CLIENT_SECRET,
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
 
 @app.after_request
 def apply_security_headers(response):
-
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
-    # Uncomment after confirming HTTPS on Cloudflare
-    # response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-
-        # JS — self + jsdelivr (marked.js) + Google Analytics + inline scripts
-        "script-src 'self' 'unsafe-inline' "
-        "https://cdn.jsdelivr.net "
-        "https://www.googletagmanager.com; "
-
-        # CSS — self + inline styles (used in login, admin, error pages)
-        "style-src 'self' 'unsafe-inline' "
-        "https://fonts.googleapis.com; "
-
-        # Fonts — Google Fonts
-        "font-src 'self' "
-        "https://fonts.gstatic.com; "
-
-        # Images — self + data URIs
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.googletagmanager.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "
-
-        # API calls — self + Google Analytics + Supabase storage (proxy-pdf route fetches server-side)
-        "connect-src 'self' "
-        "https://www.google-analytics.com "
-        "https://*.supabase.co; "
-
-        # PDFs open in new tab from Supabase storage
+        "connect-src 'self' https://www.google-analytics.com https://*.supabase.co; "
         "frame-src https://*.supabase.co; "
-
-        # No plugins, objects, or base tag hijacking
         "object-src 'none'; "
         "base-uri 'self';"
     )
-
     return response
 
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+client = genai.Client(api_key=config.GEMINI_API_KEY)
 limiter = Limiter(
     get_remote_address,
     app=app,
@@ -81,365 +95,54 @@ limiter = Limiter(
 )
 request_log = {}
 
-# ---------- Departments (URL slug → display name) ----------
-DEPARTMENTS = {
-    "bca": "BCA",
-    "bba": "BBA",
-    "bcom": "BCom",
-    "bsc-math": "BSc Mathematics",
-    "msc-physics": "MSc Physics",
-}
+DEFAULT_DEPARTMENT = config.DEFAULT_DEPARTMENT
+ALLOWED_EXTENSIONS = config.ALLOWED_EXTENSIONS
 
-DEFAULT_DEPARTMENT = "bca"
+SUPABASE_URL = config.SUPABASE_URL
+SUPABASE_KEY = config.SUPABASE_KEY
+SUPABASE_BUCKET = config.SUPABASE_BUCKET
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
-# ---------- Supabase ----------
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-SUPABASE_BUCKET = os.environ.get("SUPABASE_BUCKET")
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+STAGING_SUPABASE_URL = config.STAGING_SUPABASE_URL
+STAGING_SUPABASE_KEY = config.STAGING_SUPABASE_KEY
+STAGING_BUCKET = config.STAGING_BUCKET
+staging_supabase = create_client(STAGING_SUPABASE_URL, STAGING_SUPABASE_KEY) if STAGING_SUPABASE_URL and STAGING_SUPABASE_KEY else None
 
-# ---------- Staging Supabase (new project) ----------
-STAGING_SUPABASE_URL = os.environ.get("STAGING_SUPABASE_URL")
-STAGING_SUPABASE_KEY = os.environ.get("STAGING_SUPABASE_KEY")
-STAGING_BUCKET = os.environ.get("STAGING_SUPABASE_BUCKET", "pending-uploads")
-staging_supabase = create_client(STAGING_SUPABASE_URL, STAGING_SUPABASE_KEY)
-
-# ---------- DB (Connection Pool) ----------
-db_pool = pool.SimpleConnectionPool(1, 10, os.environ.get("DATABASE_URL"))
-
-
-def get_db():
-    try:
-        conn = db_pool.getconn()
-        now = time.time()
-        conn_id = id(conn)
-        last_used = _conn_last_used.get(conn_id, 0)
-
-        # Health check only if connection has been idle for > 30s or is closed
-        if getattr(conn, 'closed', 0) != 0 or (now - last_used) > _CONN_IDLE_TIMEOUT:
-            try:
-                cur = conn.cursor()
-                cur.execute("SELECT 1")
-                cur.close()
-            except Exception:
-                try:
-                    db_pool.putconn(conn, close=True)
-                except Exception:
-                    pass
-                conn = psycopg2.connect(os.environ.get("DATABASE_URL"))
-                _conn_last_used[id(conn)] = now
-                return conn
-
-        _conn_last_used[conn_id] = now
-        return conn
-    except Exception:
-        return psycopg2.connect(os.environ.get("DATABASE_URL"))
-
-
-def return_db(conn):
-    try:
-        if conn:
-            _conn_last_used[id(conn)] = time.time()
-            db_pool.putconn(conn)
-    except Exception as e:
-        app.logger.warning(f"putconn failed, closing directly: {e}")
-        try:
-            conn.close()
-        except Exception:
-            pass
-
-
-
-def init_db():
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS departments (
-                department_id SERIAL PRIMARY KEY,
-                slug VARCHAR(50) UNIQUE NOT NULL,
-                name VARCHAR(100) NOT NULL,
-                code VARCHAR(20),
-                description TEXT,
-                is_active BOOLEAN DEFAULT true,
-                is_coming_soon BOOLEAN DEFAULT false,
-                display_order INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        cur.execute("ALTER TABLE departments DROP COLUMN IF EXISTS icon;")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                user_id SERIAL PRIMARY KEY,
-                username VARCHAR(100) UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                role VARCHAR(20) NOT NULL DEFAULT 'user'
-            );
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS subjects (
-                subject_id SERIAL PRIMARY KEY,
-                subject_name VARCHAR(255) NOT NULL,
-                semester INTEGER,
-                department VARCHAR(50),
-                department_id INTEGER REFERENCES departments(department_id)
-            );
-        """)
-        cur.execute(
-            "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS department VARCHAR(50)"
-        )
-        cur.execute(
-            "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS department_id INTEGER REFERENCES departments(department_id)"
-        )
-        
-        # Seed default departments if missing
-        default_depts = [
-            ("bca", "BCA", "BCA", "Bachelor of Computer Applications", True, False, 1),
-            ("bcom", "BCom", "BCom", "Bachelor of Commerce", True, True, 2),
-            ("bba", "BBA", "BBA", "Bachelor of Business Administration", True, True, 3),
-            ("bsc-math", "BSc Mathematics", "BSc Math", "BSc Mathematics", True, True, 4),
-            ("msc-physics", "MSc Physics", "MSc Phys", "MSc Physics", True, True, 5),
-        ]
-        for slug, name, code, desc, active, coming_soon, order in default_depts:
-            cur.execute("""
-                INSERT INTO departments (slug, name, code, description, is_active, is_coming_soon, display_order)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (slug) DO NOTHING;
-            """, (slug, name, code, desc, active, coming_soon, order))
-
-        # Backfill department_id in subjects
-        cur.execute("""
-            UPDATE subjects s
-            SET department_id = d.department_id
-            FROM departments d
-            WHERE (LOWER(s.department) = LOWER(d.slug) OR LOWER(s.department) = LOWER(d.name) OR LOWER(s.department) = LOWER(d.code))
-              AND s.department_id IS NULL;
-        """)
-        cur.execute("""
-            UPDATE subjects
-            SET department_id = (SELECT department_id FROM departments WHERE slug = 'bca' LIMIT 1)
-            WHERE department_id IS NULL;
-        """)
-
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS question_papers (
-                paper_id SERIAL PRIMARY KEY,
-                subject_id INTEGER REFERENCES subjects(subject_id),
-                year INTEGER,
-                file_name VARCHAR(255),
-                file_path VARCHAR(255),
-                exam_type VARCHAR(100),
-                upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                file_url TEXT,
-                public_id TEXT,
-                ai_analysis TEXT,
-                file_size BIGINT
-            );
-        """)
-        cur.execute(
-            "ALTER TABLE question_papers ADD COLUMN IF NOT EXISTS file_size BIGINT"
-        )
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS pending_papers (
-                id SERIAL PRIMARY KEY,
-                subject_id INTEGER REFERENCES subjects(subject_id),
-                year INTEGER,
-                exam_type VARCHAR(100),
-                file_name VARCHAR(255),
-                staging_path VARCHAR(255),
-                submitted_by_ip VARCHAR(50),
-                submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                status VARCHAR(20) DEFAULT 'pending',
-                file_size BIGINT
-            );
-        """)
-        cur.execute("ALTER TABLE pending_papers ADD COLUMN IF NOT EXISTS file_size BIGINT;")
-
-        # Indexes for query performance optimization
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_subjects_department_id ON subjects(department_id);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_question_papers_subject_id ON question_papers(subject_id);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_question_papers_upload_date ON question_papers(upload_date);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_pending_papers_status ON pending_papers(status);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_pending_papers_subject_id ON pending_papers(subject_id);")
-
-        conn.commit()
-
-        cur.execute("SELECT COUNT(*) FROM users")
-        count = cur.fetchone()[0]
-        if count == 0:
-            default_username = os.environ.get('ADMIN_USER')
-            default_password = os.environ.get('ADMIN_PASS')
-            if default_username and default_password:
-                hash_val = generate_password_hash(default_password)
-                cur.execute(
-                    "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
-                    (default_username, hash_val, 'admin')
-                )
-                conn.commit()
-                print(f"Created default admin: {default_username}")
-    finally:
-        cur.close()
-        return_db(conn)
-
-
+# Initialize database schema and migrations
 init_db()
-
-
-# ---------- Department helpers ----------
-
-def clear_departments_cache():
-    global _DEPARTMENTS_CACHE
-    _DEPARTMENTS_CACHE.clear()
-
-
-def get_departments(active_only=True):
-    now = time.time()
-    cache_entry = _DEPARTMENTS_CACHE.get(active_only)
-    if cache_entry and (now - cache_entry["timestamp"]) < _CACHE_TTL:
-        return cache_entry["data"]
-
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        query = """
-            SELECT d.department_id, d.slug, d.name, d.code, d.description, d.is_active, d.is_coming_soon, d.display_order,
-                   COUNT(q.paper_id) as paper_count
-            FROM departments d
-            LEFT JOIN subjects s ON d.department_id = s.department_id
-            LEFT JOIN question_papers q ON s.subject_id = q.subject_id
-            WHERE (%s = false OR d.is_active = true)
-            GROUP BY d.department_id, d.slug, d.name, d.code, d.description, d.is_active, d.is_coming_soon, d.display_order
-            ORDER BY d.display_order ASC, d.name ASC;
-        """
-        cur.execute(query, (active_only,))
-        rows = cur.fetchall()
-        result = [
-            {
-                "id": r[0],
-                "slug": r[1],
-                "name": r[2],
-                "code": r[3] or r[2],
-                "description": r[4] or "",
-                "is_active": r[5],
-                "is_coming_soon": r[6],
-                "display_order": r[7],
-                "paper_count": r[8] or 0
-            }
-            for r in rows
-        ]
-        _DEPARTMENTS_CACHE[active_only] = {"data": result, "timestamp": now}
-        return result
-    except Exception as e:
-        app.logger.error(f"Error fetching departments: {e}")
-        return cache_entry["data"] if cache_entry else []
-    finally:
-        cur.close()
-        return_db(conn)
-
-
-def get_department_by_slug(slug):
-    if not slug:
-        return None
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            SELECT department_id, slug, name, code, description, is_active, is_coming_soon, display_order
-            FROM departments
-            WHERE LOWER(slug) = LOWER(%s);
-        """, (slug,))
-        row = cur.fetchone()
-        if not row:
-            return None
-        return {
-            "id": row[0],
-            "slug": row[1],
-            "name": row[2],
-            "code": row[3] or row[2],
-            "description": row[4] or "",
-            "is_active": row[5],
-            "is_coming_soon": row[6],
-            "display_order": row[7]
-        }
-    finally:
-        cur.close()
-        return_db(conn)
-
-
-def get_departments_dict(departments_list=None):
-    depts = departments_list if departments_list is not None else get_departments(active_only=False)
-    if not depts:
-        return DEPARTMENTS
-    return {d["slug"]: d["name"] for d in depts}
-
-
-def is_valid_department(name):
-    if not name:
-        return False
-    dept_dict = get_departments_dict()
-    name_str = str(name).strip()
-    return (
-        name_str in dept_dict.values()
-        or name_str in dept_dict.keys()
-        or name_str.lower() in [k.lower() for k in dept_dict.keys()]
-        or name_str.lower() in [v.lower() for v in dept_dict.values()]
-    )
-
-
-def get_department_id_by_name_or_slug(dept_input):
-    if not dept_input:
-        return None
-    dept_input_lower = str(dept_input).strip().lower()
-    depts = get_departments(active_only=False)
-    for d in depts:
-        if d["slug"].lower() == dept_input_lower or d["name"].lower() == dept_input_lower or (d.get("code") and d["code"].lower() == dept_input_lower):
-            return d["id"]
-    return None
-
-
-def auto_remove_department_coming_soon(cur, subject_id):
-    """If the department of the subject is marked as 'is_coming_soon', automatically remove that flag."""
-    if not subject_id:
-        return
-    try:
-        cur.execute("""
-            UPDATE departments
-            SET is_coming_soon = false
-            WHERE department_id = (SELECT department_id FROM subjects WHERE subject_id = %s)
-              AND is_coming_soon = true
-            RETURNING department_id;
-        """, (subject_id,))
-        updated = cur.fetchone()
-        if updated:
-            clear_departments_cache()
-            app.logger.info(f"Auto-removed 'is_coming_soon' flag for department_id {updated[0]} after publishing paper.")
-    except Exception as e:
-        app.logger.warning(f"Could not auto-remove coming soon status: {e}")
 
 
 
 # ---------- Auth helpers ----------
 
 
-def get_user_by_username(username):
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            "SELECT user_id, username, password_hash, role FROM users WHERE username = %s",
-            (username,)
-        )
-        return cur.fetchone()
-    finally:
-        cur.close()
-        return_db(conn)
-
-
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('login', next=request.url))
+        if "user_id" not in session:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest" or "application/json" in request.headers.get("Accept", ""):
+                return jsonify({"error": "Please sign in"}), 401
+            # Store the destination, flash a message, bounce to home so user sees it
+            session["post_login_redirect"] = request.url
+            flash("Sign in with your @mariancollege.org account to access this page.", "auth")
+            return redirect(url_for("home"))
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT token_version, role FROM users WHERE user_id = %s",
+                        (session["user_id"],))
+            row = cur.fetchone()
+        finally:
+            cur.close()
+            return_db(conn)
+        if not row or row[0] != session.get("token_version"):
+            session.clear()
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest" or "application/json" in request.headers.get("Accept", ""):
+                return jsonify({"error": "Please sign in"}), 401
+            session["post_login_redirect"] = request.url
+            flash("Your session has expired. Please sign in again.", "auth")
+            return redirect(url_for("home"))
+        session["role"] = row[1]  # keep role fresh if ADMIN_EMAILS changed since login
         return f(*args, **kwargs)
     return decorated
 
@@ -456,7 +159,41 @@ def admin_required(f):
 # ---------- Utility ----------
 
 
-ALLOWED_EXTENSIONS = {"pdf"}
+def clean_user_name(raw_name, email=""):
+    """
+    Extracts only the user's name from Google profile info.
+    Removes Marian College roll numbers/register numbers (e.g. 24UBC145, 23BCA101, etc.)
+    and parenthetical codes, preserving clean student/staff names.
+    """
+    if not raw_name or not str(raw_name).strip():
+        if email and "@" in email:
+            local = email.split("@")[0]
+            return re.sub(r"[._-]+", " ", local).strip().title()
+        return "User"
+
+    name = str(raw_name).strip()
+
+    # 1. Remove parenthetical roll numbers or codes like (24UBC145) or (full name regno)
+    name = re.sub(r"\s*\(\s*[^)]+\s*\)\s*", " ", name)
+
+    # 2. Remove standard register numbers (e.g. 24UBC145, 23BCA001, 24PMC102, 22BCM050)
+    # Matches 2 digits + 2-5 letters + 1-5 digits
+    name = re.sub(r"\b\d{2}[A-Za-z]{2,5}\d{1,5}\b", "", name)
+
+    # 3. Remove standalone numeric roll numbers or admission codes (e.g. " - 12345" or " 12345")
+    name = re.sub(r"\s+[-–—/]?\s*\d{3,}\b", "", name)
+
+    # 4. Remove trailing or leading hyphens/slashes/dots left behind
+    name = re.sub(r"[\s\-–—/]+$", "", name)
+    name = re.sub(r"^[\s\-–—/]+", "", name)
+
+    # 5. Collapse duplicate whitespace
+    name = re.sub(r"\s+", " ", name).strip()
+
+    if not name:
+        return raw_name.strip() if raw_name else (email.split("@")[0].title() if email else "User")
+
+    return name
 
 
 def allowed_file(filename):
@@ -592,165 +329,93 @@ Respond with:
         _os.unlink(tmp_path)
 
 
-def get_subjects(department=None):
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        if department:
-            cur.execute(
-                """
-                SELECT s.subject_id, s.subject_name, s.semester, s.department
-                FROM subjects s
-                JOIN departments d ON s.department_id = d.department_id
-                WHERE d.slug = %s
-                ORDER BY s.semester, s.subject_name
-                """,
-                (department,),
-            )
-        else:
-            cur.execute(
-                """
-                SELECT subject_id, subject_name, semester, department
-                FROM subjects
-                ORDER BY semester, subject_name
-                """
-            )
-        rows = cur.fetchall()
-        return [
-            {
-                "subject_id": r[0],
-                "subject_name": r[1],
-                "semester": r[2],
-                "department": r[3],
-            }
-            for r in rows
-        ]
-    finally:
-        cur.close()
-        return_db(conn)
-
-
-def get_department_papers(department_slug_or_name):
-    conn = get_db()
-    cur = conn.cursor()
-    papers = []
-    try:
-        cur.execute(
-            """
-            SELECT s.subject_name, s.semester, q.year, q.file_url, q.exam_type, q.paper_id,
-                   s.department,
-                   CASE WHEN q.ai_analysis IS NOT NULL THEN true ELSE false END as is_analysed
-            FROM question_papers q
-            JOIN subjects s ON q.subject_id = s.subject_id
-            JOIN departments d ON s.department_id = d.department_id
-            WHERE d.slug = %s
-            ORDER BY s.subject_name ASC, q.year DESC
-            """,
-            (department_slug_or_name,),
-        )
-        rows = cur.fetchall()
-
-        for subject_name, semester, year, file_url, exam_type, paper_id, dept, is_analysed in rows:
-            papers.append({
-                "subject": subject_name,
-                "year": year,
-                "semester": semester,
-                "department": dept or "",
-                "examType": exam_type or "—",
-                "file_url": file_url,
-                "download_url": (file_url + "?download=") if file_url else None,
-                "paper_id": paper_id,
-                "is_analysed": is_analysed,
-            })
-        return papers
-    finally:
-        cur.close()
-        return_db(conn)
-
-
-def get_department_papers_and_subjects(department_slug):
-    conn = get_db()
-    cur = conn.cursor()
-    papers = []
-    subjects = []
-    try:
-        cur.execute(
-            """
-            SELECT s.subject_name, s.semester, q.year, q.file_url, q.exam_type, q.paper_id,
-                   s.department,
-                   CASE WHEN q.ai_analysis IS NOT NULL THEN true ELSE false END as is_analysed
-            FROM question_papers q
-            JOIN subjects s ON q.subject_id = s.subject_id
-            JOIN departments d ON s.department_id = d.department_id
-            WHERE d.slug = %s
-            ORDER BY s.subject_name ASC, q.year DESC
-            """,
-            (department_slug,),
-        )
-        rows = cur.fetchall()
-        for subject_name, semester, year, file_url, exam_type, paper_id, dept, is_analysed in rows:
-            papers.append({
-                "subject": subject_name,
-                "year": year,
-                "semester": semester,
-                "department": dept or "",
-                "examType": exam_type or "—",
-                "file_url": file_url,
-                "download_url": (file_url + "?download=") if file_url else None,
-                "paper_id": paper_id,
-                "is_analysed": is_analysed,
-            })
-
-        cur.execute(
-            """
-            SELECT s.subject_id, s.subject_name, s.semester, s.department
-            FROM subjects s
-            JOIN departments d ON s.department_id = d.department_id
-            WHERE d.slug = %s
-            ORDER BY s.semester, s.subject_name
-            """,
-            (department_slug,),
-        )
-        sub_rows = cur.fetchall()
-        subjects = [
-            {
-                "subject_id": r[0],
-                "subject_name": r[1],
-                "semester": r[2],
-                "department": r[3],
-            }
-            for r in sub_rows
-        ]
-        return papers, subjects
-    finally:
-        cur.close()
-        return_db(conn)
-
 # ================================================================
 # ROUTES
 # ================================================================
 
 
-@app.route("/login", methods=["GET", "POST"])
-@limiter.limit("10 per minute")
+@app.route("/login")
+@limiter.limit("20 per minute")
 def login():
-    error = None
-    if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        if not username or not password:
-            error = "Username and password are required"
-        else:
-            row = get_user_by_username(username)
-            if row and check_password_hash(row[2], password):
-                session.clear()
-                session["user_id"] = row[0]
-                session["username"] = row[1]
-                session["role"] = row[3]
-                next_page = request.args.get("next")
-                return redirect(next_page or url_for("home"))
-            error = "Invalid username or password"
-    return render_template("login.html", error=error)
+    """Login navbar button target — immediately kicks off Google OAuth, no intermediate page."""
+    # If there's a ?next= param (e.g. from an old email link), preserve it
+    next_url = request.args.get("next")
+    if next_url:
+        session["post_login_redirect"] = next_url
+    return redirect(url_for("login_google"))
+
+
+@app.route("/login/google")
+@limiter.limit("20 per minute")
+def login_google():
+    redirect_uri = url_for("google_callback", _external=True)
+    return google.authorize_redirect(redirect_uri, hd=config.GOOGLE_ALLOWED_DOMAIN)
+
+
+@app.route("/login/google/callback")
+@limiter.limit("20 per minute")
+def google_callback():
+    try:
+        token = google.authorize_access_token()
+        user_info = token.get("userinfo")
+        if not user_info:
+            user_info = google.parse_id_token(token, nonce=None)
+    except Exception as e:
+        app.logger.exception("OAuth callback token exchange failed: %s", str(e))
+        flash("Authentication failed. Please try again.")
+        return redirect(url_for("login"))
+
+    email = user_info.get("email", "").strip().lower()
+    email_verified = user_info.get("email_verified", False)
+    raw_name = user_info.get("name", "")
+    name = clean_user_name(raw_name, email)
+    google_sub = user_info.get("sub", "")
+
+    # Use config module — single source of truth
+    if not email_verified or not email.endswith("@" + config.GOOGLE_ALLOWED_DOMAIN):
+        session.clear()
+        flash(f"Access is restricted to @{config.GOOGLE_ALLOWED_DOMAIN} accounts only.", "error")
+        return redirect(url_for("home"))
+
+    role = "admin" if email in config.ADMIN_EMAILS else "user"
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO users (email, google_sub, name, role, last_login, token_version)
+            VALUES (%s, %s, %s, %s, NOW(), 0)
+            ON CONFLICT (email) DO UPDATE SET
+                google_sub = EXCLUDED.google_sub,
+                name = EXCLUDED.name,
+                role = EXCLUDED.role,
+                last_login = NOW()
+            RETURNING user_id, token_version;
+        """, (email, google_sub, name, role))
+        user_row = cur.fetchone()
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        app.logger.exception("Failed to upsert user record: %s", str(e))
+        flash("An error occurred during sign in. Please try again.", "error")
+        return redirect(url_for("home"))
+    finally:
+        cur.close()
+        return_db(conn)
+
+    user_id, token_version = user_row[0], user_row[1]
+
+    # BUG FIX: pop redirect URL BEFORE session.clear() wipes it
+    next_url = session.pop("post_login_redirect", None)
+    session.clear()
+    session.permanent = True
+    session["user_id"] = user_id
+    session["email"] = email
+    session["name"] = name
+    session["role"] = role
+    session["token_version"] = token_version
+
+    return redirect(next_url or url_for("home"))
 
 
 @app.route("/logout")
@@ -793,18 +458,19 @@ def home():
 @login_required
 @admin_required
 def upload_page():
-    depts_dict = get_departments_dict()
+    departments_list = get_departments(active_only=True)
+    depts_dict = get_departments_dict(departments_list)
     if request.method == "POST":
         conn = get_db()
         cur = conn.cursor()
         try:
             subject_raw = request.form.get("subject_id")
             if not subject_raw or subject_raw.strip() == "":
-                return render_template("upload.html", error="Subject is required", subjects=get_subjects(), departments=depts_dict)
+                return render_template("upload.html", error="Subject is required", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
             try:
                 subject_id = int(subject_raw)
             except ValueError:
-                return render_template("upload.html", error="Invalid subject", subjects=get_subjects(), departments=depts_dict)
+                return render_template("upload.html", error="Invalid subject", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
             cur.execute(
                 "SELECT subject_id, subject_name FROM subjects WHERE subject_id = %s",
@@ -812,7 +478,7 @@ def upload_page():
             )
             row = cur.fetchone()
             if not row:
-                return render_template("upload.html", error="Subject not found.", subjects=get_subjects(), departments=depts_dict)
+                return render_template("upload.html", error="Subject not found.", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
             subject_id, subject_name = row[0], row[1]
 
             year = request.form.get("year")
@@ -822,13 +488,13 @@ def upload_page():
                 year_int = int(str(year).split("-", 1)
                                [0].strip()) if "-" in str(year) else int(year)
             except (ValueError, TypeError) as exc:
-                return render_template("upload.html", error=f"Invalid year: {exc}", subjects=get_subjects(), departments=depts_dict)
+                return render_template("upload.html", error=f"Invalid year: {exc}", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
             file = request.files.get("file")
             if not file or not file.filename:
-                return render_template("upload.html", error="No file provided", subjects=get_subjects(), departments=depts_dict)
+                return render_template("upload.html", error="No file provided", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
             if not allowed_file(file.filename):
-                return render_template("upload.html", error="Only PDF files are allowed", subjects=get_subjects(), departments=depts_dict)
+                return render_template("upload.html", error="Only PDF files are allowed", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
             exam_type = request.form.get(
                 "examType") or request.form.get("exam_type") or ""
@@ -856,6 +522,7 @@ def upload_page():
             )
             auto_remove_department_coming_soon(cur, subject_id)
             conn.commit()
+            clear_departments_cache()
 
             flash("Question paper uploaded successfully.")
             return redirect(url_for("upload_page"))
@@ -863,21 +530,23 @@ def upload_page():
         except Exception as e:
             conn.rollback()
             app.logger.exception("Upload failed")
-            return render_template("upload.html", error=str(e), subjects=get_subjects(), departments=depts_dict)
+            return render_template("upload.html", error=str(e), subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
         finally:
             cur.close()
             return_db(conn)
 
-    return render_template("upload.html", subjects=get_subjects(), departments=depts_dict)
+    return render_template("upload.html", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
 
 @app.route("/papers")
+@login_required
 def view_papers():
     departments = get_departments(active_only=True)
     return render_template("papers_home.html", departments=departments, departments_dict=get_departments_dict(departments))
 
 
 @app.route("/papers/<department>")
+@login_required
 def view_papers_by_department(department):
     department_slug = department.lower()
     dept_obj = get_department_by_slug(department_slug)
@@ -895,10 +564,10 @@ def view_papers_by_department(department):
             cur.close()
             return_db(conn)
 
-    if not dept_obj and department_slug not in DEPARTMENTS:
+    if not dept_obj:
         abort(404)
 
-    department_name = dept_obj["name"] if dept_obj else DEPARTMENTS.get(department_slug, department.upper())
+    department_name = dept_obj["name"]
 
     try:
         papers, subjects = get_department_papers_and_subjects(department_slug)
@@ -923,6 +592,7 @@ def about():
 
 
 @app.route("/analyze/<int:paper_id>")
+@login_required
 def analyze_paper(paper_id):
     conn = get_db()
     cur = conn.cursor()
@@ -1020,9 +690,11 @@ def analyze_paper(paper_id):
 # ================================================================
 
 @app.route("/user-upload", methods=["GET", "POST"])
+@login_required
 @limiter.limit("5 per hour")
 def user_upload():
-    depts_dict = get_departments_dict()
+    departments_list = get_departments(active_only=True)
+    depts_dict = get_departments_dict(departments_list)
     if request.method == "POST":
         subject_raw = request.form.get("subject_id", "").strip()
         year = request.form.get("year", "").strip()
@@ -1033,11 +705,11 @@ def user_upload():
         if not subject_raw or not year or not file or not file.filename:
             return render_template("user_upload.html",
                                    error="All fields are required.",
-                                   subjects=get_subjects(), departments=depts_dict)
+                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
         if not allowed_file(file.filename):
             return render_template("user_upload.html",
                                    error="Only PDF files allowed.",
-                                   subjects=get_subjects(), departments=depts_dict)
+                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
         try:
             subject_id = int(subject_raw)
             year_int = int(year)
@@ -1046,7 +718,7 @@ def user_upload():
         except ValueError:
             return render_template("user_upload.html",
                                    error="Invalid subject or year.",
-                                   subjects=get_subjects(), departments=depts_dict)
+                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
         # --- Upload to staging bucket ---
         staging_path = f"pending/{subject_id}/{year_int}/{uuid.uuid4()}.pdf"
@@ -1065,22 +737,23 @@ def user_upload():
             app.logger.exception("Staging upload failed")
             return render_template("user_upload.html",
                                    error="Upload failed. Please try again.",
-                                   subjects=get_subjects(), departments=depts_dict)
+                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
         # --- Save pending record ---
         conn = get_db()
         cur = conn.cursor()
         try:
             original_filename = secure_filename(file.filename)
+            submitted_by_ip = get_remote_address()
             cur.execute("""
                 INSERT INTO pending_papers
                 (subject_id, year, exam_type, file_name, staging_path, submitted_by_ip, file_size)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (subject_id, year_int, exam_type, original_filename,
-                  staging_path, request.remote_addr, len(file_bytes)))
+                  staging_path, submitted_by_ip, len(file_bytes)))
             conn.commit()
             return render_template("user_upload.html", success=True,
-                                   subjects=get_subjects(), departments=depts_dict)
+                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
         except Exception:
             app.logger.exception("Failed to save pending record")
             conn.rollback()
@@ -1090,12 +763,12 @@ def user_upload():
                 pass
             return render_template("user_upload.html",
                                    error="Submission failed. Please try again.",
-                                   subjects=get_subjects(), departments=depts_dict)
+                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
         finally:
             cur.close()
             return_db(conn)
 
-    return render_template("user_upload.html", subjects=get_subjects(), departments=depts_dict)
+    return render_template("user_upload.html", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
 
 # ================================================================
@@ -1224,6 +897,7 @@ def approve_pending(pending_id):
         )
         auto_remove_department_coming_soon(cur, subject_id)
         conn.commit()
+        clear_departments_cache()
 
         # 5. Delete from staging (non-critical)
         try:
@@ -1297,6 +971,7 @@ def refresh_analysis(paper_id):
         return_db(conn)
 
 @app.route("/download/<int:paper_id>")
+@login_required
 def download_paper(paper_id):
     conn = get_db()
     cur = conn.cursor()
@@ -1349,6 +1024,7 @@ def admin_save_department():
         slug = (data.get("slug") or "").strip().lower()
         code = (data.get("code") or "").strip() or name
         description = (data.get("description") or "").strip()
+        stream = (data.get("stream") or "FYUGP").strip()
         is_coming_soon = bool(data.get("is_coming_soon"))
         is_active = bool(data.get("is_active", True))
     else:
@@ -1357,6 +1033,7 @@ def admin_save_department():
         slug = request.form.get("slug", "").strip().lower()
         code = request.form.get("code", "").strip() or name
         description = request.form.get("description", "").strip()
+        stream = (request.form.get("stream") or "FYUGP").strip()
         is_coming_soon = request.form.get("is_coming_soon") in ("on", "true", "1", "yes")
         is_active = request.form.get("is_active", "on") in ("on", "true", "1", "yes")
 
@@ -1373,10 +1050,10 @@ def admin_save_department():
             cur.execute("""
                 UPDATE departments
                 SET name = %s, slug = %s, code = %s, description = %s,
-                    is_coming_soon = %s, is_active = %s
+                    is_coming_soon = %s, is_active = %s, stream = %s
                 WHERE department_id = %s
                 RETURNING department_id
-            """, (name, slug, code, description, is_coming_soon, is_active, int(dept_id)))
+            """, (name, slug, code, description, is_coming_soon, is_active, stream, int(dept_id)))
             row = cur.fetchone()
             if not row:
                 if not request.is_json:
@@ -1385,14 +1062,14 @@ def admin_save_department():
                 return jsonify({"error": "Department not found."}), 404
         else:
             cur.execute("""
-                INSERT INTO departments (slug, name, code, description, is_coming_soon, is_active, display_order)
-                VALUES (%s, %s, %s, %s, %s, %s, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM departments))
+                INSERT INTO departments (slug, name, code, description, is_coming_soon, is_active, display_order, stream)
+                VALUES (%s, %s, %s, %s, %s, %s, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM departments), %s)
                 ON CONFLICT (slug) DO UPDATE
                 SET name = EXCLUDED.name, code = EXCLUDED.code,
                     description = EXCLUDED.description, is_coming_soon = EXCLUDED.is_coming_soon,
-                    is_active = EXCLUDED.is_active
+                    is_active = EXCLUDED.is_active, stream = EXCLUDED.stream
                 RETURNING department_id;
-            """, (slug, name, code, description, is_coming_soon, is_active))
+            """, (slug, name, code, description, is_coming_soon, is_active, stream))
             row = cur.fetchone()
 
         conn.commit()
@@ -1518,7 +1195,7 @@ def admin_create_subject():
     data = request.get_json() or {}
     name = (data.get("subject_name") or "").strip()
     semester = data.get("semester")
-    department = (data.get("department") or DEPARTMENTS[DEFAULT_DEPARTMENT]).strip()
+    department = (data.get("department") or "BCA").strip()
 
     if not name:
         return jsonify({"error": "Subject name is required"}), 400
@@ -1527,10 +1204,10 @@ def admin_create_subject():
     if semester is not None:
         try:
             semester = int(semester)
-            if not 1 <= semester <= 8:
+            if not 1 <= semester <= 10:
                 raise ValueError
         except (ValueError, TypeError):
-            return jsonify({"error": "Semester must be between 1 and 8"}), 400
+            return jsonify({"error": "Semester must be between 1 and 10"}), 400
 
     dept_id = get_department_id_by_name_or_slug(department)
     if dept_id is None:
@@ -1545,6 +1222,7 @@ def admin_create_subject():
         )
         new_id = cur.fetchone()[0]
         conn.commit()
+        clear_departments_cache()
         return jsonify({
             "subject_id": new_id,
             "subject_name": name,
@@ -1567,7 +1245,7 @@ def admin_bulk_create_subjects():
     data = request.get_json() or {}
     names = data.get("subject_names", [])
     semester = data.get("semester")
-    department = (data.get("department") or DEPARTMENTS[DEFAULT_DEPARTMENT]).strip()
+    department = (data.get("department") or "BCA").strip()
 
     # Validate department against live DB data
     if not is_valid_department(department):
@@ -1581,10 +1259,10 @@ def admin_bulk_create_subjects():
     if semester is not None and semester != "":
         try:
             semester = int(semester)
-            if not 1 <= semester <= 8:
+            if not 1 <= semester <= 10:
                 raise ValueError
         except (ValueError, TypeError):
-            return jsonify({"error": "Semester must be between 1 and 8"}), 400
+            return jsonify({"error": "Semester must be between 1 and 10"}), 400
     else:
         semester = None
 
@@ -1608,6 +1286,7 @@ def admin_bulk_create_subjects():
         """
         inserted_rows = execute_values(cur, query, records, fetch=True)
         conn.commit()
+        clear_departments_cache()
 
         # Match results positionally with input records to preserve duplicate subject names correctly
         results = []
@@ -1632,7 +1311,7 @@ def admin_update_subject(subject_id):
     data = request.get_json() or {}
     name = (data.get("subject_name") or "").strip()
     semester = data.get("semester")
-    department = (data.get("department") or DEPARTMENTS[DEFAULT_DEPARTMENT]).strip()
+    department = (data.get("department") or "BCA").strip()
 
     if not name:
         return jsonify({"error": "Subject name is required"}), 400
@@ -1641,10 +1320,10 @@ def admin_update_subject(subject_id):
     if semester is not None:
         try:
             semester = int(semester)
-            if not 1 <= semester <= 8:
+            if not 1 <= semester <= 10:
                 raise ValueError
         except (ValueError, TypeError):
-            return jsonify({"error": "Semester must be between 1 and 8"}), 400
+            return jsonify({"error": "Semester must be between 1 and 10"}), 400
 
     dept_id = get_department_id_by_name_or_slug(department)
     if dept_id is None:
@@ -1660,6 +1339,7 @@ def admin_update_subject(subject_id):
         if cur.fetchone() is None:
             return jsonify({"error": "Subject not found"}), 404
         conn.commit()
+        clear_departments_cache()
         return jsonify({
             "subject_id": subject_id,
             "subject_name": name,
@@ -1686,6 +1366,7 @@ def admin_delete_subject(subject_id):
         if cur.fetchone() is None:
             return jsonify({"error": "Subject not found"}), 404
         conn.commit()
+        clear_departments_cache()
         return jsonify({"message": "Deleted"}), 200
     except Exception as e:
         conn.rollback()
@@ -1778,6 +1459,7 @@ def admin_delete_paper(paper_id):
         cur.execute(
             "DELETE FROM question_papers WHERE paper_id=%s", (paper_id,))
         conn.commit()
+        clear_departments_cache()
         return jsonify({"message": "Deleted"}), 200
     except Exception as e:
         conn.rollback()
@@ -1787,50 +1469,8 @@ def admin_delete_paper(paper_id):
         return_db(conn)
 
 
-@app.route("/admin/api/change-password", methods=["POST"])
-@login_required
-@admin_required
-def admin_change_password():
-    data = request.get_json()
-    current_password = data.get("current_password", "")
-    new_password = data.get("new_password", "")
-
-    if not new_password or len(new_password) < 6:
-        return jsonify({"error": "New password must be at least 6 characters"}), 400
-
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            "SELECT user_id, password_hash FROM users WHERE user_id=%s",
-            (session["user_id"],)
-        )
-        row = cur.fetchone()
-        if not row:
-            return jsonify({"error": "User not found"}), 404
-
-        if not check_password_hash(row[1], current_password):
-            return jsonify({"error": "Current password is incorrect"}), 401
-
-        new_hash = generate_password_hash(new_password)
-        cur.execute(
-            "UPDATE users SET password_hash=%s WHERE user_id=%s",
-            (new_hash, row[0])
-        )
-        conn.commit()
-        return jsonify({"message": "Password updated successfully"})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cur.close()
-        return_db(conn)
-
-# ================================================================
-# PDF PROXY  (used by client-side bulk download / JSZip)
-# ================================================================
-
 @app.route('/proxy-pdf')
+@login_required
 def proxy_pdf():
     """Fetch a Supabase-hosted PDF server-side and stream it to the client.
     This is needed because browsers block cross-origin fetch() to Supabase

@@ -717,18 +717,13 @@
                 <span class="nav-badge" id="pendingNavBadge">0</span>
             </a>
 
-            <div class="nav-section-label">Settings</div>
-            <a class="nav-link" href="#password" data-section="password">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <span class="nav-link-label">Change Password</span>
-            </a>
         </nav>
 
         <div class="sidebar-footer">
             <div class="admin-badge">
-                <div class="admin-avatar">{{ session.username[0].upper() if session.username else 'A' }}</div>
+                <div class="admin-avatar">{{ (session.name or session.email or 'A')[0].upper() }}</div>
                 <div class="admin-info">
-                    <span>{{ session.username or 'Admin' }}</span>
+                    <span>{{ session.name or session.email or 'Admin' }}</span>
                     <span>Administrator</span>
                 </div>
             </div>
@@ -853,6 +848,7 @@
                                         <th>Department Name</th>
                                         <th>Slug</th>
                                         <th>Code</th>
+                                        <th>Stream</th>
                                         <th>Description</th>
                                         <th>Papers</th>
                                         <th>Status</th>
@@ -860,7 +856,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="departmentsTableBody">
-                                    <tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>
+                                    <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1025,43 +1021,6 @@
                 </div>
             </div>
 
-            <!-- ======= CHANGE PASSWORD ======= -->
-            <div id="section-password" class="section">
-                <div style="max-width:500px;">
-                    <div class="card">
-                        <div class="card-header">
-                            <span class="card-title">🔐 Change Admin Password</span>
-                        </div>
-                        <div class="card-body" style="padding:1.5rem;">
-                            <div class="alert alert-info">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                This changes the password for <strong>{{ session.username or 'admin' }}</strong>. You will need to log in again after.
-                            </div>
-                            <div id="pwAlert"></div>
-                            <form id="changePasswordForm" onsubmit="submitChangePassword(event)">
-                                <div class="form-group">
-                                    <label class="form-label">Current Password</label>
-                                    <input type="password" class="form-control" name="current_password" required placeholder="Enter current password">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">New Password</label>
-                                    <input type="password" class="form-control" name="new_password" required minlength="6" placeholder="Min. 6 characters">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Confirm New Password</label>
-                                    <input type="password" class="form-control" name="confirm_password" required placeholder="Repeat new password">
-                                    <span class="form-error" id="pwMatchError">Passwords do not match.</span>
-                                </div>
-                                <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.5rem;">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                    Update Password
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div><!-- /content-area -->
     </div><!-- /main-content -->
 </div><!-- /admin-layout -->
@@ -1089,6 +1048,13 @@
                 <div class="form-group">
                     <label class="form-label">Code / Short Name</label>
                     <input type="text" class="form-control" name="code" id="deptFormCode" placeholder="e.g. MCA">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Program Stream / Curriculum <span style="color:var(--accent-red)">*</span></label>
+                    <select class="form-control" name="stream" id="deptFormStream" required>
+                        <option value="FYUGP">FYUGP (SEA I, SEA II, ISA)</option>
+                        <option value="5year">5 Year Integrated (CA-1, CA-2, CA-3, SEM-Final)</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Description / Subtitle</label>
@@ -1273,10 +1239,9 @@ const pageTitles = {
     subjects:    ['Subjects',          'Manage academic subjects'],
     papers:      ['Question Papers',   'View and manage uploaded papers'],
     pending:     ['Pending Reviews',   'Approve or reject user-submitted papers'],
-    password:    ['Change Password',   'Update admin login credentials'],
 };
 
-const VALID_SECTIONS = new Set(['dashboard', 'departments', 'subjects', 'papers', 'pending', 'password']);
+const VALID_SECTIONS = new Set(['dashboard', 'departments', 'subjects', 'papers', 'pending']);
 
 function showSection(name, pushState = false) {
     if (!VALID_SECTIONS.has(name)) name = 'dashboard';
@@ -1328,7 +1293,7 @@ async function loadDepartments() {
         }
 
         if (!depts || depts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-secondary)">No departments found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-secondary)">No departments found.</td></tr>';
             return;
         }
 
@@ -1341,6 +1306,11 @@ async function loadDepartments() {
                 </td>
                 <td><code style="font-size:.8125rem;background:var(--bg-secondary);padding:.2rem .4rem;border-radius:4px;">${escHtml(d.slug)}</code></td>
                 <td><strong>${escHtml(d.code || d.name)}</strong></td>
+                <td>
+                    <span class="badge ${d.stream === '5year' ? 'badge-purple' : 'badge-blue'}">
+                        ${d.stream === '5year' ? '5 Year' : 'FYUGP'}
+                    </span>
+                </td>
                 <td style="font-size:.875rem;color:var(--text-secondary);">${escHtml(d.description || '—')}</td>
                 <td><span class="badge badge-blue">${d.paper_count || 0} papers</span></td>
                 <td>
@@ -1359,7 +1329,7 @@ async function loadDepartments() {
             </tr>
         `).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--accent-red);padding:2rem;">Error: ${escHtml(err.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--accent-red);padding:2rem;">Error: ${escHtml(err.message)}</td></tr>`;
     }
 }
 
@@ -1370,6 +1340,7 @@ function openAddDepartmentModal() {
     document.getElementById('deptFormSlug').value = '';
     document.getElementById('deptFormSlug').readOnly = false;
     document.getElementById('deptFormCode').value = '';
+    document.getElementById('deptFormStream').value = 'FYUGP';
     document.getElementById('deptFormDesc').value = '';
     document.getElementById('deptFormComingSoon').checked = false;
     document.getElementById('deptFormActive').checked = true;
@@ -1383,6 +1354,7 @@ function openEditDepartmentModal(d) {
     document.getElementById('deptFormSlug').value = d.slug || '';
     document.getElementById('deptFormSlug').readOnly = true;
     document.getElementById('deptFormCode').value = d.code || '';
+    document.getElementById('deptFormStream').value = d.stream || (d.slug === 'msc-physics' ? '5year' : 'FYUGP');
     document.getElementById('deptFormDesc').value = d.description || '';
     document.getElementById('deptFormComingSoon').checked = !!d.is_coming_soon;
     document.getElementById('deptFormActive').checked = d.is_active !== false;
@@ -1397,6 +1369,7 @@ async function submitDepartment(e) {
         name: document.getElementById('deptFormName').value.trim(),
         slug: document.getElementById('deptFormSlug').value.trim().toLowerCase(),
         code: document.getElementById('deptFormCode').value.trim(),
+        stream: document.getElementById('deptFormStream').value,
         description: document.getElementById('deptFormDesc').value.trim(),
         is_coming_soon: document.getElementById('deptFormComingSoon').checked,
         is_active: document.getElementById('deptFormActive').checked
@@ -1984,40 +1957,6 @@ async function rejectPending(id) {
 }
 
 // ===== CHANGE PASSWORD =====
-async function submitChangePassword(e) {
-    e.preventDefault();
-    const form = e.target;
-    const alertEl = document.getElementById('pwAlert');
-    alertEl.innerHTML = '';
-    document.getElementById('pwMatchError').style.display = 'none';
-
-    const np = form.new_password.value;
-    const cp = form.confirm_password.value;
-    if (np !== cp) {
-        document.getElementById('pwMatchError').style.display = 'block';
-        return;
-    }
-
-    const btn = form.querySelector('button[type=submit]');
-    btn.disabled = true; btn.textContent = 'Updating…';
-
-    try {
-        const r = await fetch('/admin/api/change-password', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json','X-CSRFToken': getCsrf()},
-            body: JSON.stringify({current_password: form.current_password.value, new_password: np})
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Failed');
-        alertEl.innerHTML = alertHtml('success', 'Password changed! You will be redirected to login…');
-        form.reset();
-        setTimeout(() => { window.location.href = '{{ url_for("logout") }}'; }, 2500);
-    } catch (err) {
-        alertEl.innerHTML = alertHtml('error', err.message);
-    }
-    btn.disabled = false; btn.textContent = 'Update Password';
-}
-
 // ===== HELPERS =====
 function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

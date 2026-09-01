@@ -18,10 +18,25 @@ if (document.getElementById('semFolders')) {
     let activeType = null;
     let skipHashUpdate = false;
 
-    const EXAM_TYPES  = ['SEA I', 'SEA II', 'ISA'];
-    const EXAM_ICONS  = { 'SEA I': '📄', 'SEA II': '📋', 'ISA': '📝' };
-    const EXAM_COLORS = { 'SEA I': 'blue', 'SEA II': 'purple', 'ISA': 'green' };
-    const SLUG_TO_EXAM_TYPE = { 'sea-i': 'SEA I', 'sea-ii': 'SEA II', 'isa': 'ISA' };
+    const isFiveYear = window.CURRENT_DEPARTMENT_STREAM === '5year' || window.CURRENT_DEPARTMENT === 'msc-physics';
+    const EXAM_TYPES  = isFiveYear
+        ? ['CA-1', 'CA-2', 'CA-3', 'SEM-Final']
+        : ['SEA I', 'SEA II', 'ISA'];
+
+    const EXAM_ICONS  = {
+        'SEA I': '📄', 'SEA II': '📋', 'ISA': '📝',
+        'CA-1': '📄', 'CA-2': '📋', 'CA-3': '📝', 'SEM-Final': '🎓'
+    };
+
+    const EXAM_COLORS = {
+        'SEA I': 'blue', 'SEA II': 'purple', 'ISA': 'green',
+        'CA-1': 'blue', 'CA-2': 'purple', 'CA-3': 'orange', 'SEM-Final': 'green'
+    };
+
+    const SLUG_TO_EXAM_TYPE = {
+        'sea-i': 'SEA I', 'sea-ii': 'SEA II', 'isa': 'ISA',
+        'ca-1': 'CA-1', 'ca-2': 'CA-2', 'ca-3': 'CA-3', 'sem-final': 'SEM-Final'
+    };
 
     function examTypeToSlug(type) {
         return type.toLowerCase().replace(/\s+/g, '-');
@@ -80,7 +95,8 @@ if (document.getElementById('semFolders')) {
     function renderFolders() {
         semFolders.style.display = 'grid';
         folderPapersView.style.display = 'none';
-        const sems = [1,2,3,4,5,6];
+        const maxSem = isFiveYear ? 10 : 8;
+        const sems = Array.from({ length: maxSem }, (_, i) => i + 1);
         semFolders.innerHTML = sems.map(sem => {
             const count = papers.filter(p => String(p.semester) === String(sem)).length;
             const isEmpty = count === 0;
@@ -326,7 +342,14 @@ window.analysePaper = async function(paperId, subject) {
     document.getElementById('analyseModal').style.display = 'flex';
 
     try {
-        const res = await fetch(`/analyze/${paperId}`, { signal: analyseController.signal });
+        const res = await fetch(`/analyze/${paperId}`, {
+            signal: analyseController.signal,
+            headers: { 'Accept': 'application/json' }
+        });
+        if (res.status === 401) {
+            window.location.href = '/login?next=' + encodeURIComponent(window.location.href);
+            return;
+        }
         const data = await res.json();
         if (data.error) {
             document.getElementById('analyseResult').innerHTML =
@@ -402,7 +425,11 @@ window.closeAnalyseModal = function() {
             try {
                 // Use /proxy-pdf to avoid CORS/CSP block on direct Supabase fetch
                 const proxyUrl = '/proxy-pdf?url=' + encodeURIComponent(p.file_url);
-                const res = await fetch(proxyUrl);
+                const res = await fetch(proxyUrl, { headers: { 'Accept': 'application/json' } });
+                if (res.status === 401) {
+                    window.location.href = '/login?next=' + encodeURIComponent(window.location.href);
+                    return;
+                }
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const blob = await res.blob();
                 zip.file(filename, blob);

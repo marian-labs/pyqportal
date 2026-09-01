@@ -84,14 +84,20 @@
                         {% if session.get('user_id') %}
                         <div class="user-menu desktop-only">
                             {% if session.get('role') == 'admin' %}
-                            <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="user-name" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.username }}</a>
+                            <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="user-name" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.name or session.email }}</a>
                             {% else %}
-                            <span class="user-name">{{ session.username }}</span>
+                            <span class="user-name">{{ session.name or session.email }}</span>
                             {% endif %}
-                            <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+                            <a href="{{ url_for('logout') }}" class="btn-logout" title="Logout" aria-label="Logout">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                    <polyline points="16 17 21 12 16 7"></polyline>
+                                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                                </svg>
+                            </a>
                         </div>
                         {% else %}
-                        <a href="{{ url_for('login') }}" class="btn-login desktop-only">Login</a>
+                        <a href="{{ url_for('login_google') }}" class="btn-login desktop-only">Login</a>
                         {% endif %}
                     </div>
                 </div>
@@ -118,15 +124,23 @@
                     <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
                     {% if session.get('user_id') %}
                     <hr class="mobile-nav-divider">
-                    {% if session.get('role') == 'admin' %}
-                    <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="mobile-nav-user" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.username }}</a>
-                    {% else %}
-                    <span class="mobile-nav-user">{{ session.username }}</span>
-                    {% endif %}
-                    <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
+                    <div class="mobile-user-row">
+                        {% if session.get('role') == 'admin' %}
+                        <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="mobile-nav-user" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.name or session.email }}</a>
+                        {% else %}
+                        <span class="mobile-nav-user">{{ session.name or session.email }}</span>
+                        {% endif %}
+                        <a href="{{ url_for('logout') }}" class="mobile-logout-btn" title="Logout" aria-label="Logout">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                        </a>
+                    </div>
                     {% else %}
                     <hr class="mobile-nav-divider">
-                    <a href="{{ url_for('login') }}" class="mobile-nav-link mobile-nav-login">Login</a>
+                    <a href="{{ url_for('login_google') }}" class="mobile-nav-link mobile-nav-login">Login</a>
                     {% endif %}
                 </nav>
             </div>
@@ -153,7 +167,7 @@
         </div>
         <div class="about-hero-content">
             <div class="about-hero-badge">
-                Marian College Kuttikkanam
+                Marian College Students Council
             </div>
             <h2 class="about-hero-title">
                 Built by students,<br>

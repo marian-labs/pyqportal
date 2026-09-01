@@ -57,8 +57,10 @@ STAGING_SUPABASE_URL=https://your-staging.supabase.co
 STAGING_SUPABASE_KEY=your_staging_key
 STAGING_SUPABASE_BUCKET=pending-uploads
 DATABASE_URL=postgresql://user:password@host:5432/postgres
-ADMIN_USER=admin
-ADMIN_PASS=your_admin_password
+GOOGLE_CLIENT_ID=your_google_oauth_client_id
+GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+GOOGLE_ALLOWED_DOMAIN=mariancollege.org
+ADMIN_EMAILS=admin1@mariancollege.org,admin2@mariancollege.org
 ```
 
 ---

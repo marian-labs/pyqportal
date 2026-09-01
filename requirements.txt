@@ -11,3 +11,4 @@ python-dotenv
 pypdf
 Pillow
 pymupdf
+Authlib
