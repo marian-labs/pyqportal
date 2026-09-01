@@ -15,8 +15,13 @@ services:
       - .env
     environment:
       - PORT=${PORT:-8000}
+    volumes:
+      - paper_cache:/app/cache/papers
     healthcheck:
       test: ["CMD", "sh", "-c", "curl -f http://localhost:${PORT:-8000}/"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  paper_cache:

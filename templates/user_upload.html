@@ -642,19 +642,6 @@
                             </div>
                         </div>
 
-                        <!-- PDF Compression Option -->
-                        <div class="up-group full" style="margin-top: 0.5rem;">
-                            <label class="up-compress-option" style="display:flex; align-items:center; gap:0.75rem; cursor:pointer; background:#f8fafc; border:1px solid #e2e8f0; padding:0.85rem 1rem; border-radius:12px; transition:all 0.2s ease;">
-                                <input type="checkbox" name="compress_pdf" value="true" id="compressPdf" checked style="width:18px; height:18px; accent-color:#6366f1; cursor:pointer; flex-shrink:0;" />
-                                <div style="display:flex; flex-direction:column;">
-                                    <span style="font-size:0.875rem; font-weight:700; color:#1e293b; display:flex; align-items:center; gap:0.35rem;">
-                                        ⚡ Compress Scanned PDF <span style="font-size:0.72rem; background:#e0e7ff; color:#4338ca; padding:0.15rem 0.5rem; border-radius:999px; font-weight:700;">Recommended</span>
-                                    </span>
-                                    
-                                </div>
-                            </label>
-                        </div>
-
                     </div>
 
                     <hr class="up-divider" />
@@ -984,20 +971,18 @@
 
             if (overlay) {
                 overlay.style.display = 'flex';
-                let progress = 15;
+                let progress = 20;
                 if (progressEl) progressEl.style.width = progress + '%';
                 
                 const interval = setInterval(() => {
-                    progress += Math.floor(Math.random() * 8) + 4;
+                    progress += Math.floor(Math.random() * 10) + 5;
                     if (progress > 90) progress = 92;
                     if (progressEl) progressEl.style.width = progress + '%';
                     
-                    if (progress > 25 && progress <= 60) {
-                        if (statusEl) statusEl.textContent = compressChecked ? 'Optimizing & compressing scanned PDF...' : 'Reading PDF file contents...';
-                    } else if (progress > 60) {
-                        if (statusEl) statusEl.textContent = 'Uploading paper & saving submission record...';
+                    if (progress > 50 && statusEl) {
+                        statusEl.textContent = 'Uploading paper & saving submission record...';
                     }
-                }, 350);
+                }, 300);
             }
         });
     </script>

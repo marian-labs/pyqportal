@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort, send_file
 import os
 import re
 import time
@@ -15,6 +15,9 @@ from flask_compress import Compress
 from supabase import create_client
 from authlib.integrations.flask_client import OAuth
 from psycopg2.extras import execute_values
+
+PDF_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", "papers")
+os.makedirs(PDF_CACHE_DIR, exist_ok=True)
 
 import config
 from models import (
@@ -214,79 +217,6 @@ def format_file_size(size_bytes):
         return f"{size:.1f} TB"
     except (ValueError, TypeError):
         return "—"
-
-
-def compress_scanned_pdf(input_bytes, quality=60, max_dimension=1600):
-    """
-    Compresses PDFs using PyMuPDF (fitz) by optimizing embedded images in-place.
-    Preserves exact page count, original physical page dimensions (A4/Letter), and layout,
-    while significantly reducing file size.
-    """
-    import io
-
-    # 1. Try PyMuPDF (fitz) for in-place stream optimization
-    try:
-        import fitz
-        from PIL import Image
-
-        doc = fitz.open(stream=input_bytes, filetype="pdf")
-        processed_xrefs = set()
-
-        for page in doc:
-            for img_info in page.get_images(full=True):
-                xref = img_info[0]
-                if xref in processed_xrefs:
-                    continue
-                processed_xrefs.add(xref)
-                try:
-                    base_img = doc.extract_image(xref)
-                    if not base_img or not base_img.get("image"):
-                        continue
-                    pil_img = Image.open(io.BytesIO(base_img["image"]))
-                    if pil_img.mode in ("RGBA", "P", "LA"):
-                        pil_img = pil_img.convert("RGB")
-
-                    w, h = pil_img.size
-                    if max(w, h) > max_dimension:
-                        scale = max_dimension / float(max(w, h))
-                        w, h = int(w * scale), int(h * scale)
-                        pil_img = pil_img.resize((w, h), Image.Resampling.LANCZOS)
-
-                    buf = io.BytesIO()
-                    pil_img.save(buf, format="JPEG", quality=quality, optimize=True)
-                    doc.update_stream(xref, buf.getvalue())
-                except Exception as img_err:
-                    app.logger.warning(f"Skipped image xref {xref}: {img_err}")
-
-        out_buf = io.BytesIO()
-        doc.save(out_buf, deflate=True, garbage=4)
-        compressed = out_buf.getvalue()
-
-        if len(compressed) < len(input_bytes):
-            app.logger.info(f"PyMuPDF compressed PDF from {len(input_bytes)} B to {len(compressed)} B")
-            return compressed
-        return input_bytes
-    except Exception as fitz_err:
-        app.logger.warning(f"PyMuPDF compression fallback: {fitz_err}")
-
-    # 2. Fallback to pypdf stream compression if fitz fails
-    try:
-        import pypdf
-        reader = pypdf.PdfReader(io.BytesIO(input_bytes))
-        writer = pypdf.PdfWriter()
-        writer.append(reader)
-        writer.compress_identical_objects()
-        for page in writer.pages:
-            page.compress_content_streams()
-        out_buf = io.BytesIO()
-        writer.write(out_buf)
-        compressed = out_buf.getvalue()
-        if len(compressed) < len(input_bytes):
-            return compressed
-        return input_bytes
-    except Exception as e:
-        app.logger.warning(f"PDF fallback compression skipped: {e}")
-        return input_bytes
 
 
 def analyze_with_gemini(pdf_url, subject_name):
@@ -724,10 +654,6 @@ def user_upload():
         staging_path = f"pending/{subject_id}/{year_int}/{uuid.uuid4()}.pdf"
         try:
             file_bytes = file.read()
-            compress_requested = request.form.get("compress_pdf", "true") in ("true", "1", "on", "yes")
-            if compress_requested:
-                file_bytes = compress_scanned_pdf(file_bytes)
-
             staging_supabase.storage.from_(STAGING_BUCKET).upload(
                 staging_path,
                 file_bytes,
@@ -994,24 +920,45 @@ def serve_paper(paper_id):
 
         file_url, file_name, subject_name, year = row[0], row[1], row[2], row[3]
         safe_name = secure_filename(f"{subject_name}_{year}.pdf") or file_name or "paper.pdf"
+        is_download = request.path.endswith('/download') or request.args.get('download') is not None
 
-        # Stream from Supabase securely via backend
-        r = requests.get(file_url, timeout=30, stream=True)
+        cache_file = os.path.join(PDF_CACHE_DIR, f"{paper_id}.pdf")
+
+        # 1. If cached on local VPS disk, serve directly (0 KB Supabase egress, ~0.001s response)
+        if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
+            return send_file(
+                cache_file,
+                mimetype='application/pdf',
+                as_attachment=is_download,
+                download_name=safe_name,
+                max_age=86400
+            )
+
+        # 2. Cache miss (first view only) - download from Supabase, save to local VPS disk, and serve
+        r = requests.get(file_url, timeout=30)
         r.raise_for_status()
 
-        from flask import Response, stream_with_context
-        content_type = r.headers.get('Content-Type', 'application/pdf')
-        is_download = request.path.endswith('/download') or request.args.get('download') is not None
-        disposition = f'attachment; filename="{safe_name}"' if is_download else f'inline; filename="{safe_name}"'
+        try:
+            with open(cache_file, "wb") as f:
+                f.write(r.content)
+            return send_file(
+                cache_file,
+                mimetype='application/pdf',
+                as_attachment=is_download,
+                download_name=safe_name,
+                max_age=86400
+            )
+        except Exception as write_err:
+            app.logger.warning("Could not write to local cache: %s", write_err)
+            from io import BytesIO
+            return send_file(
+                BytesIO(r.content),
+                mimetype='application/pdf',
+                as_attachment=is_download,
+                download_name=safe_name,
+                max_age=86400
+            )
 
-        return Response(
-            stream_with_context(r.iter_content(chunk_size=65536)),
-            content_type=content_type,
-            headers={
-                'Content-Disposition': disposition,
-                'Cache-Control': 'private, max-age=3600',
-            }
-        )
     except Exception as e:
         app.logger.exception("Failed to serve paper %s: %s", paper_id, str(e))
         flash("Could not load paper. Please try again.", "error")
@@ -1492,6 +1439,15 @@ def admin_delete_paper(paper_id):
             "DELETE FROM question_papers WHERE paper_id=%s", (paper_id,))
         conn.commit()
         clear_departments_cache()
+
+        # Remove local cached copy if present
+        try:
+            cached_path = os.path.join(PDF_CACHE_DIR, f"{paper_id}.pdf")
+            if os.path.exists(cached_path):
+                os.remove(cached_path)
+        except Exception:
+            pass
+
         return jsonify({"message": "Deleted"}), 200
     except Exception as e:
         conn.rollback()
