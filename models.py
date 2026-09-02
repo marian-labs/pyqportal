@@ -67,26 +67,23 @@ def init_db():
                 is_active BOOLEAN DEFAULT true,
                 is_coming_soon BOOLEAN DEFAULT false,
                 display_order INTEGER DEFAULT 0,
+                stream VARCHAR(50) DEFAULT 'FYUGP',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
-        cur.execute("ALTER TABLE departments DROP COLUMN IF EXISTS icon;")
-        cur.execute("ALTER TABLE departments ADD COLUMN IF NOT EXISTS stream VARCHAR(50) DEFAULT 'FYUGP';")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id SERIAL PRIMARY KEY,
                 username VARCHAR(100) UNIQUE,
                 password_hash TEXT,
-                role VARCHAR(20) NOT NULL DEFAULT 'user'
+                email VARCHAR(255) UNIQUE,
+                google_sub VARCHAR(255) UNIQUE,
+                name VARCHAR(255),
+                role VARCHAR(20) NOT NULL DEFAULT 'user',
+                last_login TIMESTAMP,
+                token_version INTEGER DEFAULT 0
             );
         """)
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(255) UNIQUE;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255);")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 0;")
-        cur.execute("ALTER TABLE users ALTER COLUMN username DROP NOT NULL;")
-        cur.execute("ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS subjects (
                 subject_id SERIAL PRIMARY KEY,
@@ -96,46 +93,6 @@ def init_db():
                 department_id INTEGER REFERENCES departments(department_id)
             );
         """)
-        cur.execute(
-            "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS department VARCHAR(50)"
-        )
-        cur.execute(
-            "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS department_id INTEGER REFERENCES departments(department_id)"
-        )
-        
-        # Seed default departments if missing
-        default_depts = [
-            ("bca", "BCA", "BCA", "Bachelor of Computer Applications", True, False, 1, "FYUGP"),
-            ("bcom", "BCom", "BCom", "Bachelor of Commerce", True, True, 2, "FYUGP"),
-            ("bba", "BBA", "BBA", "Bachelor of Business Administration", True, True, 3, "FYUGP"),
-            ("bsc-math", "BSc Mathematics", "BSc Math", "BSc Mathematics", True, True, 4, "FYUGP"),
-            ("msc-physics", "MSc Physics", "MSc Phys", "MSc Physics", True, True, 5, "5year"),
-        ]
-        for slug, name, code, desc, active, coming_soon, order, stream in default_depts:
-            cur.execute("""
-                INSERT INTO departments (slug, name, code, description, is_active, is_coming_soon, display_order, stream)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (slug) DO NOTHING;
-            """, (slug, name, code, desc, active, coming_soon, order, stream))
-
-        # Ensure stream values are accurately set for existing records
-        cur.execute("UPDATE departments SET stream = '5year' WHERE slug = 'msc-physics' OR LOWER(name) LIKE '%physics%';")
-        cur.execute("UPDATE departments SET stream = 'FYUGP' WHERE (stream IS NULL OR stream = '') AND slug != 'msc-physics';")
-
-        # Backfill department_id in subjects
-        cur.execute("""
-            UPDATE subjects s
-            SET department_id = d.department_id
-            FROM departments d
-            WHERE (LOWER(s.department) = LOWER(d.slug) OR LOWER(s.department) = LOWER(d.name) OR LOWER(s.department) = LOWER(d.code))
-              AND s.department_id IS NULL;
-        """)
-        cur.execute("""
-            UPDATE subjects
-            SET department_id = (SELECT department_id FROM departments WHERE slug = 'bca' LIMIT 1)
-            WHERE department_id IS NULL;
-        """)
-
         cur.execute("""
             CREATE TABLE IF NOT EXISTS question_papers (
                 paper_id SERIAL PRIMARY KEY,
@@ -151,9 +108,6 @@ def init_db():
                 file_size BIGINT
             );
         """)
-        cur.execute(
-            "ALTER TABLE question_papers ADD COLUMN IF NOT EXISTS file_size BIGINT"
-        )
         cur.execute("""
             CREATE TABLE IF NOT EXISTS pending_papers (
                 id SERIAL PRIMARY KEY,
@@ -168,7 +122,6 @@ def init_db():
                 file_size BIGINT
             );
         """)
-        cur.execute("ALTER TABLE pending_papers ADD COLUMN IF NOT EXISTS file_size BIGINT;")
 
         # Indexes for query performance optimization
         cur.execute("CREATE INDEX IF NOT EXISTS idx_departments_slug_active ON departments(slug, is_active);")
