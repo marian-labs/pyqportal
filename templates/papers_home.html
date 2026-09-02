@@ -9,69 +9,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=2">
     <style>
         /* ── Department home page ── */
         .dept-home-wrap {
-            min-height: calc(100vh - 160px);
-            background: linear-gradient(135deg, #f0f4ff 0%, #f5f0ff 100%);
-            padding: 3rem 1.25rem 4rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .dept-home-header {
-            text-align: center;
-            max-width: 540px;
-            margin-bottom: 2.5rem;
-        }
-
-        .dept-home-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: .4rem;
-            background: rgba(59,130,246,.08);
-            border: 1px solid rgba(59,130,246,.2);
-            border-radius: 999px;
-            padding: .3rem .9rem;
-            font-size: .78rem;
-            font-weight: 700;
-            color: #2563eb;
-            letter-spacing: .05em;
-            text-transform: uppercase;
-            margin-bottom: 1rem;
-        }
-
-        .dept-home-header h1 {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 2rem;
-            font-weight: 700;
-            color: #111827;
-            line-height: 1.2;
-            margin-bottom: .6rem;
-        }
-
-        .dept-home-header h1 span {
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .dept-home-header p {
-            color: #6b7280;
-            font-size: .95rem;
-            line-height: 1.65;
+            min-height: calc(100vh - 240px);
+            background: var(--bg-secondary, #f8fafc);
+            padding: 3rem 0 5rem;
         }
 
         /* ── Department grid ── */
         .dept-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
             gap: 1.5rem;
             width: 100%;
-            max-width: 1200px;
         }
 
         @media (max-width: 1024px) {
@@ -289,20 +242,25 @@
         </div>
     </header>
 
-    <!-- ==================== MAIN ==================== -->
-    <div class="dept-home-wrap">
-
-        <div class="dept-home-header">
-            <div class="breadcrumb" style="justify-content: center; margin-bottom: 1rem;">
+    <!-- ==================== PAGE HEADER ==================== -->
+    <section class="page-header">
+        <div class="container">
+            <div class="breadcrumb">
                 <a href="{{ url_for('home') }}">Home</a>
                 <span class="breadcrumb-separator">/</span>
                 <span class="breadcrumb-current">Browse Papers</span>
             </div>
-            <h1>Browse by <span>Department</span></h1>
-            <p>Select your department to explore semester folders and previous year question papers.</p>
+            <h1 class="page-title">Browse by Department</h1>
+            <p class="page-description">
+                Select your department to explore semester folders and previous year question papers.
+            </p>
         </div>
+    </section>
 
-        <div class="dept-grid">
+    <!-- ==================== MAIN ==================== -->
+    <div class="dept-home-wrap">
+        <div class="container">
+            <div class="dept-grid">
             {% set color_palette = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1', '#f97316', '#14b8a6', '#a855f7'] %}
             {% set dept_meta = {
                 'bca':      {'label': 'Bachelor of Computer Applications', 'color': '#3b82f6'},
@@ -321,7 +279,7 @@
             {% set fill_color = meta.color if meta.color is defined else default_color %}
 
             <a href="{{ url_for('view_papers_by_department', department=slug) }}"
-               class="dept-folder-card" style="--dc: {{ fill_color }};">
+               class="dept-folder-card reveal" style="--dc: {{ fill_color }};" data-reveal-delay="{{ loop.index0 * 60 }}">
 
                 <!-- Standard Premium Folder SVG -->
                 <svg class="dept-folder-icon" viewBox="0 0 64 56" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -359,8 +317,8 @@
             </a>
             {% endfor %}
         </div>
-
     </div>
+</div>
 
     <!-- ==================== FOOTER ==================== -->
     <footer class="mini-footer">
@@ -421,5 +379,16 @@
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script src="{{ url_for('static', filename='uploadjs.js') }}"></script>
+    <script>
+        /* ── Scroll reveal ── */
+        const _revealObs = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+        }, { threshold: 0.08 });
+        document.querySelectorAll('.reveal, .reveal-left, .reveal-right').forEach((el, i) => {
+            const delay = el.getAttribute('data-reveal-delay');
+            if (delay) el.style.transitionDelay = delay + 'ms';
+            _revealObs.observe(el);
+        });
+    </script>
 </body>
 </html>

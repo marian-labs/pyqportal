@@ -16,6 +16,9 @@ from supabase import create_client
 from authlib.integrations.flask_client import OAuth
 from psycopg2.extras import execute_values
 from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_wtf.csrf import CSRFProtect, generate_csrf
+from werkzeug.exceptions import RequestEntityTooLarge
+from urllib.parse import urlparse, urljoin
 
 PDF_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", "papers")
 os.makedirs(PDF_CACHE_DIR, exist_ok=True)
@@ -45,8 +48,8 @@ app.config.update(
     SESSION_COOKIE_SECURE=(config.FLASK_ENV != "development"),
     SESSION_COOKIE_SAMESITE="Lax",
     PERMANENT_SESSION_LIFETIME=timedelta(days=30),
-    SESSION_REFRESH_EACH_REQUEST=True,
-    SEND_FILE_MAX_AGE_DEFAULT=timedelta(days=7),
+    TEMPLATES_AUTO_RELOAD=True,
+    SEND_FILE_MAX_AGE_DEFAULT=timedelta(seconds=0) if config.FLASK_ENV == "development" else timedelta(days=7),
     COMPRESS_MIMETYPES=[
         "text/html",
         "text/css",
@@ -57,8 +60,26 @@ app.config.update(
     ],
     COMPRESS_LEVEL=6,
     COMPRESS_MIN_SIZE=500,
+    MAX_CONTENT_LENGTH=25 * 1024 * 1024,  # 25 MB
 )
 Compress(app)
+
+csrf = CSRFProtect(app)
+
+
+@app.context_processor
+def inject_csrf_token():
+    # Makes {{ csrf_token() }} available in every template
+    return dict(csrf_token=generate_csrf)
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_large_file(e):
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or "application/json" in request.headers.get("Accept", ""):
+        return jsonify({"error": "File is too large."}), 413
+    flash("File is too large. Maximum size is 25MB.", "error")
+    return redirect(request.referrer or url_for("home"))
+
 
 oauth = OAuth(app)
 google = oauth.register(
@@ -276,13 +297,22 @@ Respond with:
 # ================================================================
 
 
+def is_safe_redirect(target):
+    """Return True only if target is a relative or same-host URL."""
+    if not target:
+        return False
+    ref = urlparse(request.host_url)
+    test = urlparse(urljoin(request.host_url, target))
+    return test.scheme in ("http", "https") and test.netloc == ref.netloc
+
+
 @app.route("/login")
 @limiter.limit("200 per minute")
 def login():
     """Login navbar button target — immediately kicks off Google OAuth, no intermediate page."""
     # If there's a ?next= param (e.g. from an old email link), preserve it
     next_url = request.args.get("next")
-    if next_url:
+    if next_url and is_safe_redirect(next_url):
         session["post_login_redirect"] = next_url
     return redirect(url_for("login_google"))
 
@@ -356,6 +386,10 @@ def google_callback():
     session["name"] = name
     session["role"] = role
     session["token_version"] = token_version
+
+    # Defense-in-depth: re-validate the stored redirect on the way out
+    if next_url and not is_safe_redirect(next_url):
+        next_url = None
 
     return redirect(next_url or url_for("home"))
 
@@ -442,6 +476,9 @@ def upload_page():
                 "examType") or request.form.get("exam_type") or ""
 
             file_bytes = file.read()
+            # 5 MB server-side cap for PDF uploads
+            if len(file_bytes) > 5 * 1024 * 1024:
+                return render_template("upload.html", error="File too large. Maximum PDF size is 5 MB.", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
             unique_name = f"{subject_id}/{year_int}/{uuid.uuid4()}.pdf"
             supabase.storage.from_(SUPABASE_BUCKET).upload(
                 unique_name,
@@ -469,10 +506,10 @@ def upload_page():
             flash("Question paper uploaded successfully.")
             return redirect(url_for("upload_page"))
 
-        except Exception as e:
+        except Exception:
             conn.rollback()
             app.logger.exception("Upload failed")
-            return render_template("upload.html", error=str(e), subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            return render_template("upload.html", error="Upload failed. Please try again.", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
         finally:
             cur.close()
             return_db(conn)
@@ -666,6 +703,11 @@ def user_upload():
         staging_path = f"pending/{subject_id}/{year_int}/{uuid.uuid4()}.pdf"
         try:
             file_bytes = file.read()
+            # 5 MB server-side cap for PDF uploads
+            if len(file_bytes) > 5 * 1024 * 1024:
+                return render_template("user_upload.html",
+                                       error="File too large. Maximum PDF size is 5 MB.",
+                                       subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
             staging_supabase.storage.from_(STAGING_BUCKET).upload(
                 staging_path,
                 file_bytes,
@@ -845,10 +887,10 @@ def approve_pending(pending_id):
 
         return jsonify({"message": "Approved and published successfully."})
 
-    except Exception as e:
+    except Exception:
         conn.rollback()
         app.logger.exception("Approve failed")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error. Please try again."}), 500
     finally:
         cur.close()
         return_db(conn)
@@ -883,9 +925,10 @@ def reject_pending(pending_id):
         conn.commit()
         return jsonify({"message": "Rejected and removed."})
 
-    except Exception as e:
+    except Exception:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        app.logger.exception("Reject pending failed")
+        return jsonify({"error": "Internal server error. Please try again."}), 500
     finally:
         cur.close()
         return_db(conn)
@@ -1071,12 +1114,13 @@ def admin_save_department():
             return redirect(url_for("admin_panel"))
 
         return jsonify({"message": f"Department '{name}' saved successfully!", "department_id": row[0]}), 200
-    except Exception as e:
+    except Exception:
         conn.rollback()
+        app.logger.exception("Failed to save department")
         if not request.is_json:
-            flash(f"Failed to save department: {e}")
+            flash("Failed to save department. Please try again.")
             return redirect(url_for("admin_panel"))
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error. Please try again."}), 500
     finally:
         cur.close()
         return_db(conn)
@@ -1107,9 +1151,10 @@ def admin_delete_department(dept_id):
         conn.commit()
         clear_departments_cache()
         return jsonify({"message": "Department deleted successfully"}), 200
-    except Exception as e:
+    except Exception:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        app.logger.exception("Delete department failed")
+        return jsonify({"error": "Internal server error. Please try again."}), 500
     finally:
         cur.close()
         return_db(conn)
@@ -1220,9 +1265,10 @@ def admin_create_subject():
             "semester": semester,
             "department": department,
         }), 201
-    except Exception as e:
+    except Exception:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        app.logger.exception("Create subject failed")
+        return jsonify({"error": "Internal server error. Please try again."}), 500
     finally:
         cur.close()
         return_db(conn)
@@ -1287,9 +1333,10 @@ def admin_bulk_create_subjects():
             else:
                 results.append({"subject_name": name, "ok": False, "error": "Insertion failed"})
         return jsonify({"results": results}), 201
-    except Exception as e:
+    except Exception:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        app.logger.exception("Bulk create subjects failed")
+        return jsonify({"error": "Internal server error. Please try again."}), 500
     finally:
         cur.close()
         return_db(conn)
@@ -1337,9 +1384,10 @@ def admin_update_subject(subject_id):
             "semester": semester,
             "department": department,
         })
-    except Exception as e:
+    except Exception:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        app.logger.exception("Update subject failed")
+        return jsonify({"error": "Internal server error. Please try again."}), 500
     finally:
         cur.close()
         return_db(conn)
@@ -1359,9 +1407,10 @@ def admin_delete_subject(subject_id):
         conn.commit()
         clear_departments_cache()
         return jsonify({"message": "Deleted"}), 200
-    except Exception as e:
+    except Exception:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        app.logger.exception("Delete subject failed")
+        return jsonify({"error": "Internal server error. Please try again."}), 500
     finally:
         cur.close()
         return_db(conn)
@@ -1461,9 +1510,10 @@ def admin_delete_paper(paper_id):
             pass
 
         return jsonify({"message": "Deleted"}), 200
-    except Exception as e:
+    except Exception:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        app.logger.exception("Delete paper failed")
+        return jsonify({"error": "Internal server error. Please try again."}), 500
     finally:
         cur.close()
         return_db(conn)
@@ -1522,5 +1572,8 @@ def server_error(e):
 
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(
-        os.environ.get('PORT', 8000)), debug=False)
+    app.run(
+        host='0.0.0.0',
+        port=int(os.environ.get('PORT', 8000)),
+        debug=os.environ.get('FLASK_DEBUG', 'true').lower() in ('true', '1')
+    )

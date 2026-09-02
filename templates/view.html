@@ -12,8 +12,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=2">
 </head>
 <body>
 
@@ -142,7 +142,7 @@
     <!-- ==================== PAGE HEADER ==================== -->
     <section class="page-header">
         <div class="container">
-            <div class="breadcrumb">
+            <div class="breadcrumb reveal">
                 <a href="{{ url_for('home') }}">Home</a>
                 <span class="breadcrumb-separator">/</span>
                 <a href="{{ url_for('view_papers') }}">Papers</a>
@@ -153,12 +153,12 @@
             <!-- Title left · Search right -->
             <div class="page-header-top">
                 <div class="page-header-left">
-                    <h1 class="page-title">{{ department_name }} Question Papers</h1>
-                    <p class="page-description">
+                    <h1 class="page-title reveal">{{ department_name }} Question Papers</h1>
+                    <p class="page-description reveal">
                         Browse previous year question papers for {{ department_name }}
                     </p>
                     {% if departments|length > 1 %}
-                    <div class="dept-switcher" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.85rem;">
+                    <div class="dept-switcher reveal" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.85rem;">
                         {% for slug, name in departments.items() %}
                         <a href="{{ url_for('view_papers_by_department', department=slug) }}"
                            class="btn btn-secondary{% if slug == department_slug %} active{% endif %}"
@@ -171,7 +171,7 @@
                 </div>
 
                 <!-- Search + chips on the right -->
-                <div class="search-hero-wrap">
+                <div class="search-hero-wrap reveal">
                     <div class="search-hero-box" id="searchHeroBox">
                         <svg class="search-hero-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                             <circle cx="11" cy="11" r="8"></circle>
@@ -369,5 +369,12 @@
     </script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script src="{{ url_for('static', filename='viewjs.js') }}"></script>
+    <script>
+        /* ── Scroll reveal ── */
+        const _revealObs = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+        }, { threshold: 0.08 });
+        document.querySelectorAll('.reveal, .reveal-left, .reveal-right').forEach(el => _revealObs.observe(el));
+    </script>
 </body>
 </html>

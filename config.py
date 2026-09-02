@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Flask Configuration
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev_secret_key_change_in_production")
+SECRET_KEY = os.environ.get("SECRET_KEY")
 PORT = int(os.environ.get("PORT", 8000))
 DATABASE_URL = os.environ.get("DATABASE_URL")
 FLASK_ENV = os.environ.get("FLASK_ENV", "production")
@@ -12,7 +12,7 @@ FLASK_ENV = os.environ.get("FLASK_ENV", "production")
 # Google OAuth Configuration
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
-GOOGLE_ALLOWED_DOMAIN = os.environ.get("GOOGLE_ALLOWED_DOMAIN", "mariancollege.org").strip().lower()
+GOOGLE_ALLOWED_DOMAIN = (os.environ.get("GOOGLE_ALLOWED_DOMAIN") or "mariancollege.org").strip().lower()
 ADMIN_EMAILS = {
     e.strip().lower()
     for e in os.environ.get("ADMIN_EMAILS", "").split(",")

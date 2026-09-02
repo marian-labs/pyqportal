@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=2">
 </head>
 <body class="upload-page">
   <!-- ==================== HEADER ==================== -->
@@ -138,13 +138,13 @@
     <!-- ==================== PAGE HEADER ==================== -->
     <section class="page-header">
         <div class="container">
-            <div class="breadcrumb">
+            <div class="breadcrumb reveal">
                 <a href="{{ url_for('home') }}">Home</a>
                 <span class="breadcrumb-separator">/</span>
                 <span class="breadcrumb-current">Upload Paper</span>
             </div>
-            <h1 class="page-title">Upload Question Paper</h1>
-            <p class="page-description">
+            <h1 class="page-title reveal">Upload Question Paper</h1>
+            <p class="page-description reveal">
                 Contribute to our academic community by sharing previous year question papers
             </p>
         </div>
@@ -190,6 +190,7 @@
                         {% endwith %}
 
                         <form id="uploadForm" method="POST" action="/upload" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <!-- ROW 1: Department + Subject -->
                             <div class="form-row">
                                 <div class="form-group">
@@ -290,7 +291,7 @@
                                             <line x1="12" y1="3" x2="12" y2="15"></line>
                                         </svg>
                                         <h4>Click to upload or drag and drop</h4>
-                                        <p>PDF files only (Max size: 10MB)</p>
+                                        <p>PDF files only (Max size: 5 MB)</p>
                                     </div>
                                     <div class="file-selected" id="fileSelected" style="display: none;">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -357,7 +358,7 @@
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                     <polyline points="20 6 9 17 4 12"></polyline>
                                 </svg>
-                                File size should not exceed 10MB
+                                File size should not exceed 5 MB
                             </li>
                             <li>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -448,6 +449,13 @@
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script src="{{ url_for('static', filename='uploadjs.js') }}"></script>
+    <script>
+        /* ── Scroll reveal ── */
+        const _revealObs = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+        }, { threshold: 0.12 });
+        document.querySelectorAll('.reveal, .reveal-left, .reveal-right').forEach(el => _revealObs.observe(el));
+    </script>
     <script>
         (function() {
             const deptSel = document.getElementById('uploadDepartment');

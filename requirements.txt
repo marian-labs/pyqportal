@@ -12,3 +12,4 @@ pypdf
 Pillow
 pymupdf
 Authlib
+flask-wtf

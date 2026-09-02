@@ -20,8 +20,8 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=2">
 </head>
 
 <body>
@@ -423,7 +423,7 @@
                 ] %}
                 {% for dept in departments %}
                 {% set main_color = color_palette[loop.index0 % color_palette|length] %}
-                {% if dept.is_coming_soon or dept.paper_count == 0 %}
+                {% if dept.is_coming_soon and dept.paper_count == 0 %}
                 <div class="dept-card dept-coming-soon reveal">
                     <div class="dept-icon-folder"
                         style="display: flex; justify-content: center; align-items: center; margin-bottom: 0.75rem;">
@@ -561,6 +561,10 @@
         }
 
         @media (max-width: 600px) {
+            .departments-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
             .contrib-inner {
                 grid-template-columns: 1fr;
                 padding: 1.75rem 1.5rem;

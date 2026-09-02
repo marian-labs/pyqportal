@@ -9,14 +9,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=2">
     <style>
         /* ── PAGE WRAPPER ── */
         .upload-page-wrap {
             min-height: calc(100vh - 120px);
-            background: linear-gradient(135deg, #f0f4ff 0%, #f5f0ff 100%);
-            padding: 3rem 1.25rem 4rem;
+            background: var(--bg-secondary, #f8fafc);
+            padding: 2.5rem 1.25rem 5rem;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -505,18 +505,23 @@
         </div>
     </header>
 
-    <!-- ==================== UPLOAD PAGE ==================== -->
-    <div class="upload-page-wrap">
-
-        <div class="up-page-header">
-            <div class="breadcrumb" style="justify-content: center; margin-bottom: 1rem;">
+    <!-- ==================== PAGE HEADER ==================== -->
+    <section class="page-header">
+        <div class="container">
+            <div class="breadcrumb">
                 <a href="{{ url_for('home') }}">Home</a>
                 <span class="breadcrumb-separator">/</span>
                 <span class="breadcrumb-current">Upload Paper</span>
             </div>
-            <h1>Submit a <span>Question Paper</span></h1>
-            <p>Help your classmates prepare better. Upload any previous year paper — our team reviews it before it goes live.</p>
+            <h1 class="page-title">Submit a Question Paper</h1>
+            <p class="page-description">
+                Help your classmates prepare better. Upload any previous year paper — our team reviews it before it goes live.
+            </p>
         </div>
+    </section>
+
+    <!-- ==================== UPLOAD PAGE ==================== -->
+    <div class="upload-page-wrap">
 
         {% if success %}
         <!-- SUCCESS (centred, full width) -->
@@ -553,6 +558,7 @@
             <!-- LEFT: Upload Form -->
             <div class="up-card">
                 <form method="POST" enctype="multipart/form-data" id="uploadForm" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <div class="up-grid">
 
@@ -633,7 +639,7 @@
                                 <input type="file" name="file" id="fileInput" accept=".pdf,application/pdf" required />
                                 <svg class="up-dz-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" id="dzIcon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                                 <div class="up-dz-title" id="dzTitle">Click to choose or drag &amp; drop</div>
-                                <div class="up-dz-hint" id="dzHint">PDF only · Max 20 MB</div>
+                                <div class="up-dz-hint" id="dzHint">PDF only · Max 5 MB</div>
                                 <div class="up-dz-file" id="dzFilename">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
                                     <span id="dzFilenameText"></span>
@@ -695,8 +701,8 @@
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/></svg>
                         </div>
                         <div class="up-guide-text">
-                            <strong>Compress Files Under 1 MB</strong>
-                            <p>Please compress your scanned PDF files to be under 1 MB using free online compression tools (e.g., ILovePDF or Smallpdf) before submitting.</p>
+                            <strong>Keep Files Under 5 MB</strong>
+                            <p>Maximum upload size is 5 MB. If your scanned PDF is larger, compress it using free tools like ILovePDF or Smallpdf before submitting.</p>
                         </div>
                     </div>
 
@@ -915,8 +921,8 @@
             if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
                 alert('Only PDF files are allowed.'); fileInput.value = ''; return;
             }
-            if (file.size > 20 * 1024 * 1024) {
-                alert('File too large. Max 20 MB.'); fileInput.value = ''; return;
+            if (file.size > 5 * 1024 * 1024) {
+                alert('File too large. Maximum PDF size is 5 MB.'); fileInput.value = ''; return;
             }
             dzText.textContent = file.name;
             dzFilename.classList.add('visible');
@@ -985,6 +991,13 @@
                 }, 300);
             }
         });
+    </script>
+    <script>
+        /* ── Scroll reveal for page-header ── */
+        const _revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+        }, { threshold: 0.12 });
+        document.querySelectorAll('.reveal, .reveal-left, .reveal-right').forEach(el => _revealObserver.observe(el));
     </script>
 </body>
 </html>

@@ -731,6 +731,35 @@
     background: var(--bg-secondary);
 }
 
+.departments-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .departments-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 1rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .departments-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.75rem !important;
+    }
+    .dept-card {
+        padding: 1.25rem 0.75rem !important;
+    }
+    .dept-name {
+        font-size: 0.92rem !important;
+    }
+    .dept-count {
+        font-size: 0.78rem !important;
+    }
+}
+
 .dept-card {
     padding: 2rem;
     background: white;
@@ -788,6 +817,39 @@
     font-size: 0.875rem;
     color: var(--text-secondary);
     font-weight: 500;
+}
+
+.dept-coming-soon {
+    opacity: 0.5;
+    cursor: default;
+    pointer-events: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.dept-coming-soon::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 8px,
+        rgba(0,0,0,0.02) 8px,
+        rgba(0,0,0,0.02) 16px
+    );
+}
+
+.dept-soon-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--primary-purple);
+    background: rgba(124,58,237,0.08);
+    padding: 0.25rem 0.875rem;
+    border-radius: 2rem;
+    border: 1px solid rgba(124,58,237,0.15);
+    letter-spacing: 0.04em;
 }
 
 /* ---- CTA ---- */
@@ -1264,6 +1326,39 @@
     opacity: 0;
     animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards 0.9s;
 }
+
+/* =====================================================================
+   USER-UPLOAD & BROWSE PAPERS ENTRANCE ANIMATIONS
+   ===================================================================== */
+.upload-page-wrap .up-two-col {
+    opacity: 0;
+    animation: fadeSlideUp 0.6s ease forwards 0.25s;
+}
+
+.upload-page-wrap .up-card {
+    opacity: 0;
+    animation: fadeSlideUp 0.6s ease forwards 0.3s;
+}
+
+.upload-page-wrap .up-guide-sidebar {
+    opacity: 0;
+    animation: slideInRight 0.65s cubic-bezier(0.23, 1, 0.32, 1) forwards 0.4s;
+}
+
+.dept-grid .dept-folder-card {
+    opacity: 0;
+    animation: fadeSlideUp 0.5s ease forwards;
+}
+
+.dept-grid .dept-folder-card:nth-child(1) { animation-delay: 0.1s; }
+.dept-grid .dept-folder-card:nth-child(2) { animation-delay: 0.16s; }
+.dept-grid .dept-folder-card:nth-child(3) { animation-delay: 0.22s; }
+.dept-grid .dept-folder-card:nth-child(4) { animation-delay: 0.28s; }
+.dept-grid .dept-folder-card:nth-child(5) { animation-delay: 0.34s; }
+.dept-grid .dept-folder-card:nth-child(6) { animation-delay: 0.40s; }
+.dept-grid .dept-folder-card:nth-child(7) { animation-delay: 0.46s; }
+.dept-grid .dept-folder-card:nth-child(8) { animation-delay: 0.52s; }
+
 
 /* Form control focus */
 .form-control {
