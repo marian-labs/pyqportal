@@ -183,7 +183,18 @@ if (document.getElementById('semFolders')) {
             </div>
             <div class="folder-title-row">
                 <h2>📂 Semester ${sem}</h2>
-                <span class="folder-total-badge">${totalCount} total papers</span>
+                <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+                    <span class="folder-total-badge">${totalCount} total papers</span>
+                    ${totalCount > 0 ? `
+                    <button class="btn btn-secondary" onclick="downloadSemester(${sem})" style="display:inline-flex; align-items:center; gap:0.4rem; font-size:0.8rem; padding:0.35rem 0.75rem; border-radius:8px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download Sem ${sem} ZIP
+                    </button>` : ''}
+                </div>
             </div>
             <div class="exam-type-grid" id="examTypeGrid">${typeCards}</div>
         `;
@@ -399,66 +410,111 @@ window.closeAnalyseModal = function() {
     });
 
     // ---- Bulk semester download (JSZip — single ZIP file, works in all browsers) ----
-    // Fetches all PDFs as blobs in parallel, bundles them into one ZIP, single download.
-    // This bypasses the browser multi-download block that limited the old approach to 1 file.
+    // Fetches all PDFs as blobs in batches, bundles them into one ZIP, single download.
     let isDownloadingSem = false;
+
+    function saveZipBlob(blob, filename) {
+        if (typeof window.saveAs === 'function') {
+            try {
+                window.saveAs(blob, filename);
+                return;
+            } catch (e) {
+                console.warn('saveAs failed, falling back to URL.createObjectURL', e);
+            }
+        }
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            if (a.parentNode) a.parentNode.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }, 2000);
+    }
 
     window.downloadSemester = async function(sem) {
         if (isDownloadingSem) return;
-        const semPapers = papers.filter(p => String(p.semester) === String(sem) && p.file_url);
-        if (semPapers.length === 0) return;
+        const semPapers = papers.filter(p => String(p.semester) === String(sem) && (p.file_url || p.paper_id));
+        if (semPapers.length === 0) {
+            showToast(`⚠️ No papers found for Semester ${sem}.`);
+            return;
+        }
 
         if (!window.JSZip) {
-            showToast('⚠️ JSZip not loaded yet — try again in a moment.');
+            showToast('⚠️ JSZip library is still loading. Please try again in a moment.');
             return;
         }
 
         isDownloadingSem = true;
+        try {
+            const zip = new JSZip();
+            let done = 0;
+            showToast(`⬇️ Fetching 1 of ${semPapers.length} papers…`);
 
-        const zip = new JSZip();
-        let done = 0;
-        showToast(`⬇️ Fetching paper 1 of ${semPapers.length}…`);
+            // Fetch in batches of 4 to prevent connection overload and socket timeouts
+            const BATCH_SIZE = 4;
+            for (let i = 0; i < semPapers.length; i += BATCH_SIZE) {
+                const batch = semPapers.slice(i, i + BATCH_SIZE);
+                await Promise.all(batch.map(async (p) => {
+                    const baseFilename = `${sanitizeFilename(p.subject)}_${sanitizeFilename(p.examType || 'paper')}_${p.year || 'paper'}.pdf`;
+                    try {
+                        const targetUrl = (p.file_url && p.file_url.startsWith('http'))
+                            ? ('/proxy-pdf?url=' + encodeURIComponent(p.file_url))
+                            : (p.file_url || ('/paper/' + p.paper_id + '/view'));
+                        const res = await fetch(targetUrl);
+                        if (res.status === 401) {
+                            window.location.href = '/login?next=' + encodeURIComponent(window.location.href);
+                            return;
+                        }
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        const blob = await res.blob();
 
-        // Fetch all in parallel (one promise per paper)
-        const fetchPromises = semPapers.map(async (p) => {
-            const filename = `${sanitizeFilename(p.subject)}_${sanitizeFilename(p.examType || 'paper')}_${p.year}.pdf`;
-            try {
-                const targetUrl = (p.file_url && p.file_url.startsWith('http'))
-                    ? ('/proxy-pdf?url=' + encodeURIComponent(p.file_url))
-                    : (p.file_url || ('/paper/' + p.paper_id + '/view'));
-                const res = await fetch(targetUrl);
-                if (res.status === 401) {
-                    window.location.href = '/login?next=' + encodeURIComponent(window.location.href);
-                    return;
-                }
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const blob = await res.blob();
-                zip.file(filename, blob);
-            } catch (err) {
-                console.warn(`Skipped ${filename}:`, err);
+                        let uniqueFilename = baseFilename;
+                        let counter = 1;
+                        while (zip.file(uniqueFilename)) {
+                            uniqueFilename = `${sanitizeFilename(p.subject)}_${sanitizeFilename(p.examType || 'paper')}_${p.year || 'paper'}_(${counter}).pdf`;
+                            counter++;
+                        }
+                        zip.file(uniqueFilename, blob);
+                    } catch (err) {
+                        console.warn(`Skipped ${baseFilename}:`, err);
+                    }
+                    done++;
+                    showToast(`⬇️ Fetching ${done} of ${semPapers.length} papers…`);
+                }));
             }
-            done++;
-            showToast(`⬇️ Fetching paper ${done} of ${semPapers.length}…`);
-        });
 
-        await Promise.all(fetchPromises);
+            const fileCount = Object.keys(zip.files).length;
+            if (fileCount === 0) {
+                showToast('⚠️ No papers could be fetched. Please check your connection.');
+                return;
+            }
 
-        if (Object.keys(zip.files).length === 0) {
-            showToast('⚠️ No papers could be fetched. Check your connection.');
+            showToast('📦 Packaging into ZIP…');
+            const zipBlob = await zip.generateAsync({
+                type: 'blob',
+                compression: 'DEFLATE',
+                compressionOptions: { level: 6 }
+            });
+
+            saveZipBlob(zipBlob, `Semester_${sem}_Papers.zip`);
+            showToast(`✅ Semester ${sem} — ${fileCount} paper${fileCount === 1 ? '' : 's'} downloaded!`);
+        } catch (err) {
+            console.error('Error downloading semester papers:', err);
+            showToast('⚠️ Failed to generate ZIP. Please try again.');
+        } finally {
             isDownloadingSem = false;
-            return;
         }
-
-        showToast('📦 Building ZIP…');
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        saveAs(zipBlob, `Semester_${sem}_Papers.zip`);
-
-        isDownloadingSem = false;
-        showToast(`✅ Semester ${sem} — ${Object.keys(zip.files).length} papers downloaded!`);
     };
 
     function sanitizeFilename(name) {
-        return String(name || 'Subject').replace(/[\/\\?%*:|"<>]/g, '-').trim();
+        return String(name || 'Subject')
+            .replace(/[\/\\?%*:|"<>]/g, '-')
+            .replace(/\s+/g, '_')
+            .trim();
     }
 
     // ---- Unified search (replaces old Subject/Year/Search filter dropdowns) ----
