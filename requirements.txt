@@ -11,3 +11,5 @@ python-dotenv
 pypdf
 Pillow
 pymupdf
+Authlib
+flask-wtf

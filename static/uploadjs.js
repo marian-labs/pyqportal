@@ -73,10 +73,27 @@ rippleStyle.textContent = `
 `;
 document.head.appendChild(rippleStyle);
 
-/* ── Submit button: loading spinner on submit ── */
+/* ── Submit button: loading spinner + 5MB size guard on submit ── */
 const uploadForm = document.getElementById('uploadForm');
 if (uploadForm) {
-    uploadForm.addEventListener('submit', function () {
+    uploadForm.addEventListener('submit', function (e) {
+        // Client-side 5 MB guard
+        const fileInput = this.querySelector('input[type="file"]');
+        if (fileInput && fileInput.files.length > 0) {
+            const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+            if (fileInput.files[0].size > MAX_BYTES) {
+                e.preventDefault();
+                const errEl = document.getElementById('fileError');
+                if (errEl) {
+                    errEl.textContent = 'File is too large. Maximum PDF size is 5 MB.';
+                    errEl.style.display = 'block';
+                } else {
+                    alert('File is too large. Maximum PDF size is 5 MB.');
+                }
+                return;
+            }
+        }
+
         const btn = this.querySelector('button[type="submit"]');
         if (!btn) return;
         btn.disabled = true;

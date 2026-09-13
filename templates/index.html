@@ -20,8 +20,8 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=2">
 </head>
 
 <body>
@@ -30,13 +30,13 @@
         <div class="container-fluid">
             <div class="unified-header">
                 <!-- Left: College Branding -->
-                <div class="college-brand">
+                <a href="{{ url_for('home') }}" class="college-brand" style="text-decoration:none;">
                     <img src="{{ url_for('static', filename='mcsc_logo.webp') }}"
                         alt="MCSC Marian College Students Council" class="college-logo">
-                </div>
+                </a>
 
                 <!-- Center: Portal Branding -->
-                <div class="portal-brand">
+                <a href="{{ url_for('home') }}" class="portal-brand" style="text-decoration:none;">
                     <div class="portal-logo">
                         <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <defs>
@@ -62,7 +62,7 @@
                         <h1 class="portal-title">PYQ Portal</h1>
                         <p class="portal-subtitle">Previous Year Question Papers</p>
                     </div>
-                </div>
+                </a>
 
                 <!-- Right: Navigation & Actions -->
                 <div class="header-actions">
@@ -89,11 +89,23 @@
 
                         {% if session.get('user_id') %}
                         <div class="user-menu desktop-only">
-                            <span class="user-name">{{ session.username }}</span>
-                            <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+                            {% if session.get('role') == 'admin' %}
+                            <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer"
+                                class="user-name" style="text-decoration:none; color:#ffffff;"
+                                title="Open Admin Panel in new tab">{{ session.name or session.email }}</a>
+                            {% else %}
+                            <span class="user-name">{{ session.name or session.email }}</span>
+                            {% endif %}
+                            <a href="{{ url_for('logout') }}" class="btn-logout" title="Logout" aria-label="Logout">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                    <polyline points="16 17 21 12 16 7"></polyline>
+                                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                                </svg>
+                            </a>
                         </div>
                         {% else %}
-                        <a href="{{ url_for('login') }}" class="btn-login desktop-only">Login</a>
+                        <a href="{{ url_for('login_google') }}" class="btn-login desktop-only">Login</a>
                         {% endif %}
                     </div>
                 </div>
@@ -120,16 +132,208 @@
                     <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
                     {% if session.get('user_id') %}
                     <hr class="mobile-nav-divider">
-                    <span class="mobile-nav-user">{{ session.username }}</span>
-                    <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
+                    <div class="mobile-user-row">
+                        {% if session.get('role') == 'admin' %}
+                        <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer"
+                            class="mobile-nav-user" style="text-decoration:none; color:#ffffff;"
+                            title="Open Admin Panel in new tab">{{ session.name or session.email }}</a>
+                        {% else %}
+                        <span class="mobile-nav-user">{{ session.name or session.email }}</span>
+                        {% endif %}
+                        <a href="{{ url_for('logout') }}" class="mobile-logout-btn" title="Logout" aria-label="Logout">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                        </a>
+                    </div>
                     {% else %}
                     <hr class="mobile-nav-divider">
-                    <a href="{{ url_for('login') }}" class="mobile-nav-link mobile-nav-login">Login</a>
+                    <a href="{{ url_for('login_google') }}" class="mobile-nav-link mobile-nav-login">Login</a>
                     {% endif %}
                 </nav>
             </div>
         </div>
     </header>
+
+    <!-- ==================== FLASH MESSAGES ==================== -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <style>
+          /* Flash Toast — matches site design system */
+          .flash-stack {
+            position: fixed;
+            top: 5rem; /* clear the sticky header */
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            align-items: center;
+            pointer-events: none;
+            width: 100%;
+            padding: 0 1rem;
+          }
+          .flash-toast {
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1.125rem;
+            border-radius: 14px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.875rem;
+            font-weight: 600;
+            line-height: 1.4;
+            max-width: 520px;
+            width: 100%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.12);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            animation: flashIn 0.38s cubic-bezier(0.16,1,0.3,1) both;
+            border: 1px solid transparent;
+            position: relative;
+            overflow: hidden;
+          }
+          /* Shimmer line at top */
+          .flash-toast::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            border-radius: 14px 14px 0 0;
+          }
+          /* Auth (sign-in required) — site blue-purple */
+          .flash-toast--auth {
+            background: linear-gradient(135deg, rgba(30,42,80,0.96) 0%, rgba(37,53,120,0.96) 100%);
+            color: #e0eaff;
+            border-color: rgba(99,139,255,0.25);
+          }
+          .flash-toast--auth::before { background: linear-gradient(90deg, #3B82F6, #7C3AED); }
+          /* Error — site accent-red */
+          .flash-toast--error {
+            background: linear-gradient(135deg, rgba(80,20,20,0.96) 0%, rgba(120,28,28,0.96) 100%);
+            color: #ffe0e0;
+            border-color: rgba(239,68,68,0.25);
+          }
+          .flash-toast--error::before { background: linear-gradient(90deg, #EF4444, #DC2626); }
+          /* Success / generic */
+          .flash-toast--success, .flash-toast-- {
+            background: linear-gradient(135deg, rgba(10,42,30,0.96) 0%, rgba(16,70,45,0.96) 100%);
+            color: #d1fae5;
+            border-color: rgba(16,185,129,0.25);
+          }
+          .flash-toast--success::before, .flash-toast--::before { background: linear-gradient(90deg, #10B981, #059669); }
+
+          .flash-icon {
+            flex-shrink: 0;
+            width: 34px; height: 34px;
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+          }
+          .flash-toast--auth .flash-icon   { background: rgba(59,130,246,0.18); }
+          .flash-toast--error .flash-icon  { background: rgba(239,68,68,0.18); }
+          .flash-toast--success .flash-icon { background: rgba(16,185,129,0.18); }
+
+          .flash-body { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; }
+          .flash-msg  { opacity: 0.95; }
+          .flash-signin {
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            margin-top: 0.4rem;
+            background: linear-gradient(135deg, #3B82F6, #7C3AED);
+            color: #fff;
+            padding: 0.35rem 0.8rem;
+            border-radius: 7px;
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 700;
+            width: fit-content;
+            transition: opacity 0.2s;
+            box-shadow: 0 2px 10px rgba(59,130,246,0.4);
+          }
+          .flash-signin:hover { opacity: 0.88; color: #fff; }
+          .flash-close {
+            background: none; border: none; cursor: pointer;
+            color: inherit; opacity: 0.55;
+            padding: 0.25rem; margin-left: 0.25rem;
+            border-radius: 6px; line-height: 1;
+            font-size: 1rem; flex-shrink: 0;
+            transition: opacity 0.15s, background 0.15s;
+          }
+          .flash-close:hover { opacity: 1; background: rgba(255,255,255,0.12); }
+
+          @keyframes flashIn  { from { opacity:0; transform:translateY(-14px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+          @keyframes flashOut { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(-8px); } }
+
+          /* Progress bar (auto-dismiss countdown) */
+          .flash-progress {
+            position: absolute;
+            bottom: 0; left: 0;
+            height: 3px;
+            border-radius: 0 0 0 14px;
+            animation: flashProgress 6s linear forwards;
+          }
+          .flash-toast--auth   .flash-progress { background: linear-gradient(90deg, #3B82F6, #7C3AED); }
+          .flash-toast--error  .flash-progress { background: #EF4444; }
+          .flash-toast--success .flash-progress, .flash-toast-- .flash-progress { background: #10B981; }
+          @keyframes flashProgress { from { width: 100%; } to { width: 0%; } }
+
+          /* Mobile adjustments */
+          @media (max-width: 600px) {
+            .flash-stack { top: 4.5rem; padding: 0 0.75rem; }
+            .flash-toast { font-size: 0.82rem; padding: 0.75rem 0.9rem; border-radius: 12px; }
+            .flash-icon  { width: 28px; height: 28px; border-radius: 8px; }
+          }
+        </style>
+
+        <div class="flash-stack" id="flashStack">
+          {% for category, message in messages %}
+            <div class="flash-toast flash-toast--{{ category }}" role="alert" aria-live="polite">
+              <div class="flash-progress"></div>
+              <div class="flash-icon">
+                {% if category == 'auth' %}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                {% elif category == 'error' %}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                {% else %}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                {% endif %}
+              </div>
+              <div class="flash-body">
+                <span class="flash-msg">{{ message }}</span>
+                {% if category == 'auth' %}
+                  <a href="{{ url_for('login_google') }}" class="flash-signin">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                    Sign In with Google
+                  </a>
+                {% endif %}
+              </div>
+              <button class="flash-close" onclick="dismissToast(this)" aria-label="Dismiss">✕</button>
+            </div>
+          {% endfor %}
+        </div>
+
+        <script>
+          function dismissToast(btn) {
+            const toast = btn.closest('.flash-toast');
+            toast.style.animation = 'flashOut 0.3s ease forwards';
+            setTimeout(() => {
+              toast.remove();
+              if (!document.querySelectorAll('.flash-toast').length) {
+                document.getElementById('flashStack')?.remove();
+              }
+            }, 300);
+          }
+          // Auto-dismiss after 6s
+          setTimeout(() => {
+            document.querySelectorAll('.flash-toast').forEach(el => dismissToast(el.querySelector('.flash-close')));
+          }, 6000);
+        </script>
+      {% endif %}
+    {% endwith %}
+
     <!-- ==================== HERO SECTION ==================== -->
     <section class="hero-section">
         <div class="hero-background"></div>
@@ -199,7 +403,7 @@
     </section>
     <!-- ==================== ANNOUNCEMENT BANNER ==================== -->
     <div class="announcement-banner" id="announcementBanner">
-        <span>🎓 New papers elm loading makkaleee... <br>
+        <span>New papers elm loading makkaleee... <br>
             puthye sem nammk tookkam...😎✌️</span>
         <button onclick="document.getElementById('announcementBanner').style.display='none'">✕</button>
     </div>
@@ -213,16 +417,87 @@
             </div>
 
             <div class="departments-grid">
+                {% set color_palette = [
+                '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899',
+                '#06b6d4', '#6366f1', '#f97316', '#14b8a6', '#a855f7'
+                ] %}
                 {% for dept in departments %}
-                {% if dept.is_coming_soon or dept.paper_count == 0 %}
+                {% set main_color = color_palette[loop.index0 % color_palette|length] %}
+                {% if dept.is_coming_soon and dept.paper_count == 0 %}
                 <div class="dept-card dept-coming-soon reveal">
-                    <span class="dept-icon">{{ dept.icon }}</span>
+                    <div class="dept-icon-folder"
+                        style="display: flex; justify-content: center; align-items: center; margin-bottom: 0.75rem;">
+                        <svg width="48" height="48" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="folderGradHome{{ loop.index }}" x1="0" y1="0" x2="56" y2="56"
+                                    gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="{{ main_color }}" stop-opacity="0.95" />
+                                    <stop offset="100%" stop-color="{{ main_color }}" stop-opacity="0.75" />
+                                </linearGradient>
+                                <filter id="folderShadowHome{{ loop.index }}" x="-10%" y="-10%" width="130%"
+                                    height="130%">
+                                    <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{{ main_color }}"
+                                        flood-opacity="0.3" />
+                                </filter>
+                            </defs>
+                            <path
+                                d="M6 14C6 10.6863 8.68629 8 12 8H22C24.1217 8 26.0717 9.11719 27.1213 10.9531L28.8787 14.0469C29.9283 15.8828 31.8783 17 34 17H44C47.3137 17 50 19.6863 50 23V42C50 45.3137 47.3137 48 44 48H12C8.68629 48 6 45.3137 6 42V14Z"
+                                fill="url(#folderGradHome{{ loop.index }})" opacity="0.6" />
+                            <rect x="14" y="16" width="28" height="24" rx="3" fill="#FFFFFF" opacity="0.9" />
+                            <line x1="18" y1="22" x2="32" y2="22" stroke="#94A3B8" stroke-width="2"
+                                stroke-linecap="round" />
+                            <line x1="18" y1="27" x2="36" y2="27" stroke="#CBD5E1" stroke-width="2"
+                                stroke-linecap="round" />
+                            <line x1="18" y1="32" x2="28" y2="32" stroke="#CBD5E1" stroke-width="2"
+                                stroke-linecap="round" />
+                            <path
+                                d="M6 24C6 20.6863 8.68629 18 12 18H44C47.3137 18 50 20.6863 50 24V42C50 45.3137 47.3137 48 44 48H12C8.68629 48 6 45.3137 6 42V24Z"
+                                fill="url(#folderGradHome{{ loop.index }})"
+                                filter="url(#folderShadowHome{{ loop.index }})" />
+                            <path
+                                d="M12 19H44C46.7614 19 49 21.2386 49 24V25C49 22.2386 46.7614 20 44 20H12C9.23858 20 7 22.2386 7 25V24C7 21.2386 9.23858 19 12 19Z"
+                                fill="#FFFFFF" opacity="0.4" />
+                        </svg>
+                    </div>
                     <h3 class="dept-name">{{ dept.name }}</h3>
                     <p class="dept-soon-badge">Coming Soon</p>
                 </div>
                 {% else %}
                 <a href="{{ url_for('view_papers_by_department', department=dept.slug) }}" class="dept-card reveal">
-                    <span class="dept-icon">{{ dept.icon }}</span>
+                    <div class="dept-icon-folder"
+                        style="display: flex; justify-content: center; align-items: center; margin-bottom: 0.75rem;">
+                        <svg width="48" height="48" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="folderGradHome{{ loop.index }}" x1="0" y1="0" x2="56" y2="56"
+                                    gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="{{ main_color }}" stop-opacity="0.95" />
+                                    <stop offset="100%" stop-color="{{ main_color }}" stop-opacity="0.75" />
+                                </linearGradient>
+                                <filter id="folderShadowHome{{ loop.index }}" x="-10%" y="-10%" width="130%"
+                                    height="130%">
+                                    <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{{ main_color }}"
+                                        flood-opacity="0.3" />
+                                </filter>
+                            </defs>
+                            <path
+                                d="M6 14C6 10.6863 8.68629 8 12 8H22C24.1217 8 26.0717 9.11719 27.1213 10.9531L28.8787 14.0469C29.9283 15.8828 31.8783 17 34 17H44C47.3137 17 50 19.6863 50 23V42C50 45.3137 47.3137 48 44 48H12C8.68629 48 6 45.3137 6 42V14Z"
+                                fill="url(#folderGradHome{{ loop.index }})" opacity="0.6" />
+                            <rect x="14" y="16" width="28" height="24" rx="3" fill="#FFFFFF" opacity="0.9" />
+                            <line x1="18" y1="22" x2="32" y2="22" stroke="#94A3B8" stroke-width="2"
+                                stroke-linecap="round" />
+                            <line x1="18" y1="27" x2="36" y2="27" stroke="#CBD5E1" stroke-width="2"
+                                stroke-linecap="round" />
+                            <line x1="18" y1="32" x2="28" y2="32" stroke="#CBD5E1" stroke-width="2"
+                                stroke-linecap="round" />
+                            <path
+                                d="M6 24C6 20.6863 8.68629 18 12 18H44C47.3137 18 50 20.6863 50 24V42C50 45.3137 47.3137 48 44 48H12C8.68629 48 6 45.3137 6 42V24Z"
+                                fill="url(#folderGradHome{{ loop.index }})"
+                                filter="url(#folderShadowHome{{ loop.index }})" />
+                            <path
+                                d="M12 19H44C46.7614 19 49 21.2386 49 24V25C49 22.2386 46.7614 20 44 20H12C9.23858 20 7 22.2386 7 25V24C7 21.2386 9.23858 19 12 19Z"
+                                fill="#FFFFFF" opacity="0.4" />
+                        </svg>
+                    </div>
                     <h3 class="dept-name">{{ dept.name }}</h3>
                     <p class="dept-count">{{ dept.paper_count }} Paper{% if dept.paper_count != 1 %}s{% endif %}</p>
                 </a>
@@ -230,7 +505,7 @@
                 {% endfor %}
             </div>
 
-            <p class="dept-more-note reveal">More departments being added soon — stay tuned! 🚀</p>
+            <p class="dept-more-note reveal">More departments being added soon — stay tuned!</p>
         </div>
     </section>
 
@@ -286,6 +561,10 @@
         }
 
         @media (max-width: 600px) {
+            .departments-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
             .contrib-inner {
                 grid-template-columns: 1fr;
                 padding: 1.75rem 1.5rem;
@@ -363,7 +642,7 @@
                                 stroke-width="3">
                                 <polyline points="20,6 9,17 4,12" />
                             </svg>
-                            PDF only · No login needed
+                            PDF only
                         </span>
 
                     </div>
@@ -393,35 +672,41 @@
     <!-- ==================== END CONTRIBUTE SECTION ==================== -->
 
     <!-- ==================== CTA SECTION ==================== -->
-    <section class="cta-section" style="padding: 2.25rem 0 !important; background: linear-gradient(135deg, var(--primary-blue, #2563eb) 0%, var(--primary-purple, #7c3aed) 100%);">
+    <section class="cta-section"
+        style="padding: 2.25rem 0 !important; background: linear-gradient(135deg, var(--primary-blue, #2563eb) 0%, var(--primary-purple, #7c3aed) 100%);">
         <div class="container">
-            <div class="cta-content reveal" style="display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap;">
-                
+            <div class="cta-content reveal"
+                style="display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap;">
+
                 <!-- Left Title -->
                 <div style="flex: 1; min-width: 240px;">
-                    <span style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #bfdbfe; display: block; margin-bottom: 0.25rem;">
+                    <span
+                        style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #bfdbfe; display: block; margin-bottom: 0.25rem;">
                         PYQ Portal
                     </span>
-                    <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 1.65rem; font-weight: 800; color: #ffffff; margin: 0; line-height: 1.25;">
+                    <h2
+                        style="font-family: 'Space Grotesk', sans-serif; font-size: 1.65rem; font-weight: 800; color: #ffffff; margin: 0; line-height: 1.25;">
                         Exam season?<br><span style="color: #fef08a;">We got you...!</span>
                     </h2>
                 </div>
 
                 <!-- Right Points Badges / Grid -->
-                <div style="flex: 2; min-width: 300px; display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center;">
-                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
+                <div
+                    style="flex: 2; min-width: 300px; display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center;">
+                    <span
+                        style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
                         📄 Previous year question papers
                     </span>
-                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
+                    <span
+                        style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
                         🎓 All semesters covered
                     </span>
-                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
+                    <span
+                        style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
                         📝 SEA I, SEA II, ISA papers
                     </span>
-                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e0e7ff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 600;">
-                        🔓 No login needed
-                    </span>
-                    <span style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(99,102,241,0.22); border: 1px solid rgba(165,180,252,0.35); color: #ffffff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 700;">
+                    <span
+                        style="display: inline-flex; align-items: center; gap: 0.45rem; background: rgba(99,102,241,0.22); border: 1px solid rgba(165,180,252,0.35); color: #ffffff; padding: 0.4rem 0.85rem; border-radius: 10px; font-size: 0.84rem; font-weight: 700;">
                         ✨ AI-powered question analysis
                     </span>
                 </div>

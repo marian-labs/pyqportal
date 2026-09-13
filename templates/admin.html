@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <meta charset="UTF-8">
@@ -683,13 +684,13 @@
 <div class="admin-layout">
     <!-- ========== SIDEBAR ========== -->
     <aside class="sidebar" id="sidebar">
-        <div class="sidebar-brand">
+        <a href="{{ url_for('home') }}" class="sidebar-brand" style="text-decoration:none;">
             <div class="brand-icon">PYQ</div>
             <div class="brand-text">
                 <h2>Admin</h2>
                 <span>Marian College</span>
             </div>
-        </div>
+        </a>
 
         <nav class="sidebar-nav">
             <div class="nav-section-label">Overview</div>
@@ -699,6 +700,10 @@
             </a>
 
             <div class="nav-section-label">Manage</div>
+            <a class="nav-link" href="#departments" data-section="departments">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                <span class="nav-link-label">Departments</span>
+            </a>
             <a class="nav-link" href="#subjects" data-section="subjects">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
                 <span class="nav-link-label">Subjects</span>
@@ -713,18 +718,13 @@
                 <span class="nav-badge" id="pendingNavBadge">0</span>
             </a>
 
-            <div class="nav-section-label">Settings</div>
-            <a class="nav-link" href="#password" data-section="password">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <span class="nav-link-label">Change Password</span>
-            </a>
         </nav>
 
         <div class="sidebar-footer">
             <div class="admin-badge">
-                <div class="admin-avatar">{{ session.username[0].upper() if session.username else 'A' }}</div>
+                <div class="admin-avatar">{{ (session.name or session.email or 'A')[0].upper() }}</div>
                 <div class="admin-info">
-                    <span>{{ session.username or 'Admin' }}</span>
+                    <span>{{ session.name or session.email or 'Admin' }}</span>
                     <span>Administrator</span>
                 </div>
             </div>
@@ -827,6 +827,44 @@
                 </div>
             </div>
 
+            <!-- ======= DEPARTMENTS ======= -->
+            <div id="section-departments" class="section">
+                <div class="card">
+                    <div class="card-header">
+                        <div style="display:flex;align-items:center;gap:.75rem;">
+                            <span class="card-title">Departments</span>
+                            <span id="departmentCountBadge" class="badge badge-purple" style="display:none;"></span>
+                        </div>
+                        <button class="btn btn-primary" onclick="openAddDepartmentModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add Department
+                        </button>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Department Name</th>
+                                        <th>Slug</th>
+                                        <th>Code</th>
+                                        <th>Stream</th>
+                                        <th>Description</th>
+                                        <th>Papers</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="departmentsTableBody">
+                                    <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ======= SUBJECTS ======= -->
             <div id="section-subjects" class="section">
                 <div class="card">
@@ -836,7 +874,7 @@
                             <span id="subjectCountBadge" class="badge badge-blue" style="display:none;"></span>
                         </div>
                         <div style="display:flex; gap:.5rem;">
-                            <button class="btn btn-secondary" onclick="openModal('modalAddDepartment')">
+                            <button class="btn btn-ghost" onclick="openAddDepartmentModal()">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                                 Add Department
                             </button>
@@ -984,86 +1022,59 @@
                 </div>
             </div>
 
-            <!-- ======= CHANGE PASSWORD ======= -->
-            <div id="section-password" class="section">
-                <div style="max-width:500px;">
-                    <div class="card">
-                        <div class="card-header">
-                            <span class="card-title">🔐 Change Admin Password</span>
-                        </div>
-                        <div class="card-body" style="padding:1.5rem;">
-                            <div class="alert alert-info">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                This changes the password for <strong>{{ session.username or 'admin' }}</strong>. You will need to log in again after.
-                            </div>
-                            <div id="pwAlert"></div>
-                            <form id="changePasswordForm" onsubmit="submitChangePassword(event)">
-                                <div class="form-group">
-                                    <label class="form-label">Current Password</label>
-                                    <input type="password" class="form-control" name="current_password" required placeholder="Enter current password">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">New Password</label>
-                                    <input type="password" class="form-control" name="new_password" required minlength="6" placeholder="Min. 6 characters">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Confirm New Password</label>
-                                    <input type="password" class="form-control" name="confirm_password" required placeholder="Repeat new password">
-                                    <span class="form-error" id="pwMatchError">Passwords do not match.</span>
-                                </div>
-                                <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.5rem;">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                    Update Password
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div><!-- /content-area -->
     </div><!-- /main-content -->
 </div><!-- /admin-layout -->
 
-<!-- ========== ADD DEPARTMENT MODAL ========== -->
-<div class="modal-overlay" id="modalAddDepartment">
+<!-- ========== DEPARTMENT MODAL (ADD / EDIT) ========== -->
+<div class="modal-overlay" id="modalDepartment">
     <div class="modal" style="max-width:500px;">
         <div class="modal-header">
-            <h3 class="modal-title">Add / Manage Department</h3>
-            <button class="modal-close" onclick="closeModal('modalAddDepartment')">
+            <h3 class="modal-title" id="deptModalTitle">Add Department</h3>
+            <button class="modal-close" onclick="closeModal('modalDepartment')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
-        <form action="{{ url_for('add_department') }}" method="POST">
+        <form id="departmentForm" onsubmit="submitDepartment(event)">
+            <input type="hidden" name="department_id" id="deptFormId">
             <div class="modal-body">
                 <div class="form-group">
                     <label class="form-label">Department Name <span style="color:var(--accent-red)">*</span></label>
-                    <input type="text" class="form-control" name="name" placeholder="e.g. Master of Computer Applications" required>
+                    <input type="text" class="form-control" name="name" id="deptFormName" placeholder="e.g. Master of Computer Applications" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">URL Slug <span style="color:var(--accent-red)">*</span></label>
-                    <input type="text" class="form-control" name="slug" placeholder="e.g. mca" required>
+                    <input type="text" class="form-control" name="slug" id="deptFormSlug" placeholder="e.g. mca" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Code / Short Name</label>
-                    <input type="text" class="form-control" name="code" placeholder="e.g. MCA">
+                    <input type="text" class="form-control" name="code" id="deptFormCode" placeholder="e.g. MCA">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Emoji Icon</label>
-                    <input type="text" class="form-control" name="icon" placeholder="e.g. 💻, 📊, ⚛️" value="📚">
+                    <label class="form-label">Program Stream / Curriculum <span style="color:var(--accent-red)">*</span></label>
+                    <select class="form-control" name="stream" id="deptFormStream" required>
+                        <option value="FYUGP">FYUGP (SEA I, SEA II, ISA)</option>
+                        <option value="5year">5 Year Integrated (CA-1, CA-2, CA-3, SEM-Final)</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Description / Subtitle</label>
-                    <input type="text" class="form-control" name="description" placeholder="e.g. Master of Computer Applications">
+                    <input type="text" class="form-control" name="description" id="deptFormDesc" placeholder="e.g. Master of Computer Applications">
                 </div>
-                <div class="form-group" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem;">
-                    <input type="checkbox" id="is_coming_soon" name="is_coming_soon">
-                    <label for="is_coming_soon" style="font-size:0.85rem; font-weight:600; cursor:pointer;">Mark as "Coming Soon"</label>
+                <div style="display:flex; gap:1.5rem; margin-top:0.75rem;">
+                    <div class="form-group" style="display:flex; align-items:center; gap:0.5rem; margin:0;">
+                        <input type="checkbox" id="deptFormComingSoon" name="is_coming_soon">
+                        <label for="deptFormComingSoon" style="font-size:0.85rem; font-weight:600; cursor:pointer;">"Coming Soon"</label>
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:center; gap:0.5rem; margin:0;">
+                        <input type="checkbox" id="deptFormActive" name="is_active" checked>
+                        <label for="deptFormActive" style="font-size:0.85rem; font-weight:600; cursor:pointer;">Active</label>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-ghost" onclick="closeModal('modalAddDepartment')">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save Department</button>
+                <button type="button" class="btn btn-ghost" onclick="closeModal('modalDepartment')">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="deptFormSubmitBtn">Save Department</button>
             </div>
         </form>
     </div>
@@ -1224,14 +1235,14 @@
 <script>
 // ===== NAVIGATION =====
 const pageTitles = {
-    dashboard: ['Dashboard',         'Overview of your portal activity'],
-    subjects:  ['Subjects',          'Manage academic subjects'],
-    papers:    ['Question Papers',   'View and manage uploaded papers'],
-    pending:   ['Pending Reviews',   'Approve or reject user-submitted papers'],
-    password:  ['Change Password',   'Update admin login credentials'],
+    dashboard:   ['Dashboard',         'Overview of your portal activity'],
+    departments: ['Departments',       'Manage academic departments'],
+    subjects:    ['Subjects',          'Manage academic subjects'],
+    papers:      ['Question Papers',   'View and manage uploaded papers'],
+    pending:     ['Pending Reviews',   'Approve or reject user-submitted papers'],
 };
 
-const VALID_SECTIONS = new Set(['dashboard', 'subjects', 'papers', 'pending', 'password']);
+const VALID_SECTIONS = new Set(['dashboard', 'departments', 'subjects', 'papers', 'pending']);
 
 function showSection(name, pushState = false) {
     if (!VALID_SECTIONS.has(name)) name = 'dashboard';
@@ -1256,14 +1267,172 @@ function showSection(name, pushState = false) {
         history.pushState(null, '', '#' + name);
     }
 
-    if (name === 'dashboard') loadStats();
-    if (name === 'subjects')  loadSubjects();
-    if (name === 'papers')    loadPapers();
-    if (name === 'pending')   loadPending();
+    if (name === 'dashboard')   loadStats();
+    if (name === 'departments') loadDepartments();
+    if (name === 'subjects')    loadSubjects();
+    if (name === 'papers')      loadPapers();
+    if (name === 'pending')     loadPending();
 }
 
 function navigateTo(name) {
     showSection(name);
+}
+
+// ===== DEPARTMENTS MANAGEMENT =====
+async function loadDepartments() {
+    const tbody = document.getElementById('departmentsTableBody');
+    if (!tbody) return;
+    try {
+        const res = await fetch('/admin/api/departments');
+        if (!res.ok) throw new Error('Failed to load departments');
+        const depts = await res.json();
+
+        const badge = document.getElementById('departmentCountBadge');
+        if (badge) {
+            badge.textContent = depts.length + ' total';
+            badge.style.display = 'inline-flex';
+        }
+
+        if (!depts || depts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-secondary)">No departments found.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = depts.map(d => `
+            <tr>
+                <td>
+                    <div style="font-weight:600;">
+                        <span>${escHtml(d.name)}</span>
+                    </div>
+                </td>
+                <td><code style="font-size:.8125rem;background:var(--bg-secondary);padding:.2rem .4rem;border-radius:4px;">${escHtml(d.slug)}</code></td>
+                <td><strong>${escHtml(d.code || d.name)}</strong></td>
+                <td>
+                    <span class="badge ${d.stream === '5year' ? 'badge-purple' : 'badge-blue'}">
+                        ${d.stream === '5year' ? '5 Year' : 'FYUGP'}
+                    </span>
+                </td>
+                <td style="font-size:.875rem;color:var(--text-secondary);">${escHtml(d.description || '—')}</td>
+                <td><span class="badge badge-blue">${d.paper_count || 0} papers</span></td>
+                <td>
+                    ${d.is_coming_soon ? '<span class="badge badge-orange">Coming Soon</span>' : (d.is_active !== false ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Inactive</span>')}
+                </td>
+                <td>
+                    <div class="td-actions">
+                        <button class="btn-icon edit" title="Edit Department" onclick="openEditDepartmentModal(${JSON.stringify(d).replace(/"/g, '&quot;')})">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn-icon delete" title="Delete Department" onclick="confirmDeleteDepartment(${d.id}, '${escHtml((d.name || '').replace(/'/g, "\\'"))}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--accent-red);padding:2rem;">Error: ${escHtml(err.message)}</td></tr>`;
+    }
+}
+
+function openAddDepartmentModal() {
+    document.getElementById('deptModalTitle').textContent = 'Add New Department';
+    document.getElementById('deptFormId').value = '';
+    document.getElementById('deptFormName').value = '';
+    document.getElementById('deptFormSlug').value = '';
+    document.getElementById('deptFormSlug').readOnly = false;
+    document.getElementById('deptFormCode').value = '';
+    document.getElementById('deptFormStream').value = 'FYUGP';
+    document.getElementById('deptFormDesc').value = '';
+    document.getElementById('deptFormComingSoon').checked = false;
+    document.getElementById('deptFormActive').checked = true;
+    openModal('modalDepartment');
+}
+
+function openEditDepartmentModal(d) {
+    document.getElementById('deptModalTitle').textContent = 'Edit Department: ' + d.name;
+    document.getElementById('deptFormId').value = d.id || '';
+    document.getElementById('deptFormName').value = d.name || '';
+    document.getElementById('deptFormSlug').value = d.slug || '';
+    document.getElementById('deptFormSlug').readOnly = true;
+    document.getElementById('deptFormCode').value = d.code || '';
+    document.getElementById('deptFormStream').value = d.stream || (d.slug === 'msc-physics' ? '5year' : 'FYUGP');
+    document.getElementById('deptFormDesc').value = d.description || '';
+    document.getElementById('deptFormComingSoon').checked = !!d.is_coming_soon;
+    document.getElementById('deptFormActive').checked = d.is_active !== false;
+    openModal('modalDepartment');
+}
+
+async function submitDepartment(e) {
+    e.preventDefault();
+    const deptId = document.getElementById('deptFormId').value;
+    const data = {
+        id: deptId ? parseInt(deptId) : null,
+        name: document.getElementById('deptFormName').value.trim(),
+        slug: document.getElementById('deptFormSlug').value.trim().toLowerCase(),
+        code: document.getElementById('deptFormCode').value.trim(),
+        stream: document.getElementById('deptFormStream').value,
+        description: document.getElementById('deptFormDesc').value.trim(),
+        is_coming_soon: document.getElementById('deptFormComingSoon').checked,
+        is_active: document.getElementById('deptFormActive').checked
+    };
+
+    try {
+        const res = await fetch('/admin/api/departments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Failed to save department');
+
+        toast(result.message || 'Department saved successfully!');
+        closeModal('modalDepartment');
+        loadDepartments();
+        refreshDepartmentDropdowns();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+function confirmDeleteDepartment(id, name) {
+    document.getElementById('deleteModalTitle').textContent = 'Delete Department';
+    document.getElementById('deleteModalBody').textContent = `Are you sure you want to delete department "${name}"? This cannot be undone.`;
+    document.getElementById('confirmDeleteBtn').onclick = async function() {
+        try {
+            const res = await fetch(`/admin/api/departments/${id}`, { method: 'DELETE' });
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || 'Delete failed');
+            toast(result.message || 'Department deleted');
+            closeModal('modalConfirmDelete');
+            loadDepartments();
+            refreshDepartmentDropdowns();
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+    openModal('modalConfirmDelete');
+}
+
+async function refreshDepartmentDropdowns() {
+    try {
+        const res = await fetch('/admin/api/departments');
+        if (!res.ok) return;
+        const depts = await res.json();
+        const optionsHtml = depts.map(d => `<option value="${escHtml(d.name)}">${escHtml(d.name)}</option>`).join('');
+
+        const bulkDept = document.getElementById('bulkSubjectDept');
+        if (bulkDept) bulkDept.innerHTML = optionsHtml;
+
+        const editDept = document.getElementById('editSubjectDepartment');
+        if (editDept) editDept.innerHTML = optionsHtml;
+
+        const filterDept = document.getElementById('filterSubjectDept');
+        if (filterDept) {
+            const val = filterDept.value;
+            filterDept.innerHTML = '<option value="">All Departments</option>' + optionsHtml;
+            filterDept.value = val;
+        }
+    } catch (e) {}
 }
 
 // ===== SIDEBAR MOBILE =====
@@ -1789,40 +1958,6 @@ async function rejectPending(id) {
 }
 
 // ===== CHANGE PASSWORD =====
-async function submitChangePassword(e) {
-    e.preventDefault();
-    const form = e.target;
-    const alertEl = document.getElementById('pwAlert');
-    alertEl.innerHTML = '';
-    document.getElementById('pwMatchError').style.display = 'none';
-
-    const np = form.new_password.value;
-    const cp = form.confirm_password.value;
-    if (np !== cp) {
-        document.getElementById('pwMatchError').style.display = 'block';
-        return;
-    }
-
-    const btn = form.querySelector('button[type=submit]');
-    btn.disabled = true; btn.textContent = 'Updating…';
-
-    try {
-        const r = await fetch('/admin/api/change-password', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json','X-CSRFToken': getCsrf()},
-            body: JSON.stringify({current_password: form.current_password.value, new_password: np})
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Failed');
-        alertEl.innerHTML = alertHtml('success', 'Password changed! You will be redirected to login…');
-        form.reset();
-        setTimeout(() => { window.location.href = '{{ url_for("logout") }}'; }, 2500);
-    } catch (err) {
-        alertEl.innerHTML = alertHtml('error', err.message);
-    }
-    btn.disabled = false; btn.textContent = 'Update Password';
-}
-
 // ===== HELPERS =====
 function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

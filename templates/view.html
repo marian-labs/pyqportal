@@ -12,8 +12,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=2">
 </head>
 <body>
 
@@ -22,14 +22,14 @@
     <div class="container-fluid">
         <div class="unified-header">
             <!-- Left: College Branding -->
-            <div class="college-brand">
+            <a href="{{ url_for('home') }}" class="college-brand" style="text-decoration:none;">
                 <img src="{{ url_for('static', filename='mcsc_logo.webp') }}" 
                      alt="MCSC Marian College Students Council" 
                      class="college-logo">
-            </div>
+            </a>
 
             <!-- Center: Portal Branding -->
-            <div class="portal-brand">
+            <a href="{{ url_for('home') }}" class="portal-brand" style="text-decoration:none;">
                 <div class="portal-logo">
                     <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <defs>
@@ -49,7 +49,7 @@
                     <h1 class="portal-title">PYQ Portal</h1>
                     <p class="portal-subtitle">Previous Year Question Papers</p>
                 </div>
-            </div>
+            </a>
 
             <!-- Right: Navigation & Actions -->
             <div class="header-actions">
@@ -75,11 +75,21 @@
 
                     {% if session.get('user_id') %}
                     <div class="user-menu desktop-only">
-                        <span class="user-name">{{ session.username }}</span>
-                        <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+                        {% if session.get('role') == 'admin' %}
+                        <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="user-name" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.name or session.email }}</a>
+                        {% else %}
+                        <span class="user-name">{{ session.name or session.email }}</span>
+                        {% endif %}
+                        <a href="{{ url_for('logout') }}" class="btn-logout" title="Logout" aria-label="Logout">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                        </a>
                     </div>
                     {% else %}
-                    <a href="{{ url_for('login') }}" class="btn-login desktop-only">Login</a>
+                    <a href="{{ url_for('login_google') }}" class="btn-login desktop-only">Login</a>
                     {% endif %}
                 </div>
             </div>
@@ -106,11 +116,23 @@
                 <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
                 {% if session.get('user_id') %}
                 <hr class="mobile-nav-divider">
-                <span class="mobile-nav-user">{{ session.username }}</span>
-                <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
+                    <div class="mobile-user-row">
+                        {% if session.get('role') == 'admin' %}
+                        <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="mobile-nav-user" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.name or session.email }}</a>
+                        {% else %}
+                        <span class="mobile-nav-user">{{ session.name or session.email }}</span>
+                        {% endif %}
+                        <a href="{{ url_for('logout') }}" class="mobile-logout-btn" title="Logout" aria-label="Logout">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                        </a>
+                    </div>
                 {% else %}
                 <hr class="mobile-nav-divider">
-                <a href="{{ url_for('login') }}" class="mobile-nav-link mobile-nav-login">Login</a>
+                <a href="{{ url_for('login_google') }}" class="mobile-nav-link mobile-nav-login">Login</a>
                 {% endif %}
             </nav>
         </div>
@@ -120,7 +142,7 @@
     <!-- ==================== PAGE HEADER ==================== -->
     <section class="page-header">
         <div class="container">
-            <div class="breadcrumb">
+            <div class="breadcrumb reveal">
                 <a href="{{ url_for('home') }}">Home</a>
                 <span class="breadcrumb-separator">/</span>
                 <a href="{{ url_for('view_papers') }}">Papers</a>
@@ -131,12 +153,12 @@
             <!-- Title left · Search right -->
             <div class="page-header-top">
                 <div class="page-header-left">
-                    <h1 class="page-title">{{ department_name }} Question Papers</h1>
-                    <p class="page-description">
+                    <h1 class="page-title reveal">{{ department_name }} Question Papers</h1>
+                    <p class="page-description reveal">
                         Browse previous year question papers for {{ department_name }}
                     </p>
                     {% if departments|length > 1 %}
-                    <div class="dept-switcher" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.85rem;">
+                    <div class="dept-switcher reveal" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.85rem;">
                         {% for slug, name in departments.items() %}
                         <a href="{{ url_for('view_papers_by_department', department=slug) }}"
                            class="btn btn-secondary{% if slug == department_slug %} active{% endif %}"
@@ -149,7 +171,7 @@
                 </div>
 
                 <!-- Search + chips on the right -->
-                <div class="search-hero-wrap">
+                <div class="search-hero-wrap reveal">
                     <div class="search-hero-box" id="searchHeroBox">
                         <svg class="search-hero-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                             <circle cx="11" cy="11" r="8"></circle>
@@ -167,9 +189,16 @@
                     </div>
                     <div class="search-chips">
                         <span class="search-chip-label">Try:</span>
+                        {% if department_obj and (department_obj.stream == '5year' or department_slug == 'msc-physics') %}
+                        <button class="search-chip" onclick="setSearch('CA-1')">CA-1</button>
+                        <button class="search-chip" onclick="setSearch('CA-2')">CA-2</button>
+                        <button class="search-chip" onclick="setSearch('CA-3')">CA-3</button>
+                        <button class="search-chip" onclick="setSearch('SEM-Final')">SEM-Final</button>
+                        {% else %}
                         <button class="search-chip" onclick="setSearch('SEA I')">SEA I</button>
                         <button class="search-chip" onclick="setSearch('SEA II')">SEA II</button>
                         <button class="search-chip" onclick="setSearch('ISA')">ISA</button>
+                        {% endif %}
                         <button class="search-chip" onclick="setSearch('{{ department_name.split()[0] }}')">{{ department_name.split()[0] }}</button>
                     </div>
                 </div>
@@ -225,13 +254,6 @@
                 </svg>
                 Back
             </button>
-            <!-- Floating back button for mobile scroll -->
-<button class="btn-back-float" id="btnBackFloat">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="15 18 9 12 15 6"></polyline>
-    </svg>
-    Back
-</button>
             <div class="folder-papers-header" id="folderPapersHeader"></div>
             <div class="papers-grid" id="papersGrid"></div>
             <div class="no-results" id="noResults" style="display:none;">
@@ -343,8 +365,16 @@
     <script>
         window.PAPERS_FROM_BACKEND = {{ (papers | default([])) | tojson }};
         window.CURRENT_DEPARTMENT = {{ department_slug | tojson }};
+        window.CURRENT_DEPARTMENT_STREAM = {{ (department_obj.stream if (department_obj and department_obj.stream) else ('5year' if department_slug == 'msc-physics' else 'FYUGP')) | tojson }};
     </script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script src="{{ url_for('static', filename='viewjs.js') }}"></script>
+    <script>
+        /* ── Scroll reveal ── */
+        const _revealObs = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+        }, { threshold: 0.08 });
+        document.querySelectorAll('.reveal, .reveal-left, .reveal-right').forEach(el => _revealObs.observe(el));
+    </script>
 </body>
 </html>

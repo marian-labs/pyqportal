@@ -12,8 +12,8 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=2">
 </head>
 
 <body>
@@ -24,13 +24,13 @@
         <div class="container-fluid">
             <div class="unified-header">
                 <!-- Left: College Branding -->
-                <div class="college-brand">
+                <a href="{{ url_for('home') }}" class="college-brand" style="text-decoration:none;">
                     <img src="{{ url_for('static', filename='mcsc_logo.webp') }}"
                         alt="MCSC Marian College Students Council" class="college-logo">
-                </div>
+                </a>
 
                 <!-- Center: Portal Branding -->
-                <div class="portal-brand">
+                <a href="{{ url_for('home') }}" class="portal-brand" style="text-decoration:none;">
                     <div class="portal-logo">
                         <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <defs>
@@ -56,7 +56,7 @@
                         <h1 class="portal-title">PYQ Portal</h1>
                         <p class="portal-subtitle">Previous Year Question Papers</p>
                     </div>
-                </div>
+                </a>
 
                 <!-- Right: Navigation & Actions -->
                 <div class="header-actions">
@@ -83,11 +83,21 @@
 
                         {% if session.get('user_id') %}
                         <div class="user-menu desktop-only">
-                            <span class="user-name">{{ session.username }}</span>
-                            <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+                            {% if session.get('role') == 'admin' %}
+                            <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="user-name" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.name or session.email }}</a>
+                            {% else %}
+                            <span class="user-name">{{ session.name or session.email }}</span>
+                            {% endif %}
+                            <a href="{{ url_for('logout') }}" class="btn-logout" title="Logout" aria-label="Logout">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                    <polyline points="16 17 21 12 16 7"></polyline>
+                                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                                </svg>
+                            </a>
                         </div>
                         {% else %}
-                        <a href="{{ url_for('login') }}" class="btn-login desktop-only">Login</a>
+                        <a href="{{ url_for('login_google') }}" class="btn-login desktop-only">Login</a>
                         {% endif %}
                     </div>
                 </div>
@@ -114,11 +124,23 @@
                     <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
                     {% if session.get('user_id') %}
                     <hr class="mobile-nav-divider">
-                    <span class="mobile-nav-user">{{ session.username }}</span>
-                    <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
+                    <div class="mobile-user-row">
+                        {% if session.get('role') == 'admin' %}
+                        <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="mobile-nav-user" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.name or session.email }}</a>
+                        {% else %}
+                        <span class="mobile-nav-user">{{ session.name or session.email }}</span>
+                        {% endif %}
+                        <a href="{{ url_for('logout') }}" class="mobile-logout-btn" title="Logout" aria-label="Logout">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                        </a>
+                    </div>
                     {% else %}
                     <hr class="mobile-nav-divider">
-                    <a href="{{ url_for('login') }}" class="mobile-nav-link mobile-nav-login">Login</a>
+                    <a href="{{ url_for('login_google') }}" class="mobile-nav-link mobile-nav-login">Login</a>
                     {% endif %}
                 </nav>
             </div>
@@ -145,7 +167,7 @@
         </div>
         <div class="about-hero-content">
             <div class="about-hero-badge">
-                Marian College Kuttikkanam
+                Marian College Students Council
             </div>
             <h2 class="about-hero-title">
                 Built by students,<br>

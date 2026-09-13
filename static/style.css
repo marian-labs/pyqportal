@@ -1250,7 +1250,21 @@ textarea.form-control {
     }
     
     .departments-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.875rem;
+    }
+
+    /* Compact card padding so 2 fit side-by-side on small screens */
+    .departments-grid .dept-card {
+        padding: 1.25rem 1rem;
+    }
+
+    .departments-grid .dept-name {
+        font-size: 0.95rem;
+    }
+
+    .departments-grid .dept-count {
+        font-size: 0.8rem;
     }
 }
 .announcement-banner {

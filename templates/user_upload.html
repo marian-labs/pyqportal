@@ -9,14 +9,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=2">
     <style>
         /* ── PAGE WRAPPER ── */
         .upload-page-wrap {
             min-height: calc(100vh - 120px);
-            background: linear-gradient(135deg, #f0f4ff 0%, #f5f0ff 100%);
-            padding: 3rem 1.25rem 4rem;
+            background: var(--bg-secondary, #f8fafc);
+            padding: 2.5rem 1.25rem 5rem;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -25,7 +25,7 @@
         /* ── PAGE HEADER ── */
         .up-page-header {
             text-align: center;
-            max-width: 860px;
+            max-width: 1200px;
             width: 100%;
             margin-bottom: 2rem;
         }
@@ -70,7 +70,7 @@
         /* ── ALERTS ── */
         .up-alert {
             width: 100%;
-            max-width: 860px;
+            max-width: 1200px;
             border-radius: 12px;
             padding: .9rem 1.2rem;
             font-size: .9rem;
@@ -92,10 +92,10 @@
         /* ── TWO-COLUMN WRAPPER ── */
         .up-two-col {
             width: 100%;
-            max-width: 900px;
+            max-width: 1200px;
             display: grid;
-            grid-template-columns: 1fr 340px;
-            gap: 1.5rem;
+            grid-template-columns: 1fr 380px;
+            gap: 1.75rem;
             align-items: start;
         }
 
@@ -396,12 +396,12 @@
     <header class="main-header">
         <div class="container-fluid">
             <div class="unified-header">
-                <div class="college-brand">
+                <a href="{{ url_for('home') }}" class="college-brand" style="text-decoration:none;">
                     <img src="{{ url_for('static', filename='mcsc_logo.webp') }}"
                         alt="MCSC Marian College Students Council" class="college-logo">
-                </div>
+                </a>
 
-                <div class="portal-brand">
+                <a href="{{ url_for('home') }}" class="portal-brand" style="text-decoration:none;">
                     <div class="portal-logo">
                         <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <defs>
@@ -421,7 +421,7 @@
                         <h1 class="portal-title">PYQ Portal</h1>
                         <p class="portal-subtitle">Previous Year Question Papers</p>
                     </div>
-                </div>
+                </a>
 
                 <div class="header-actions">
                     <nav class="main-nav">
@@ -445,11 +445,21 @@
                         </button>
                         {% if session.get('user_id') %}
                         <div class="user-menu desktop-only">
-                            <span class="user-name">{{ session.username }}</span>
-                            <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+                            {% if session.get('role') == 'admin' %}
+                            <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="user-name" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.name or session.email }}</a>
+                            {% else %}
+                            <span class="user-name">{{ session.name or session.email }}</span>
+                            {% endif %}
+                            <a href="{{ url_for('logout') }}" class="btn-logout" title="Logout" aria-label="Logout">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                    <polyline points="16 17 21 12 16 7"></polyline>
+                                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                                </svg>
+                            </a>
                         </div>
                         {% else %}
-                        <a href="{{ url_for('login') }}" class="btn-login desktop-only">Login</a>
+                        <a href="{{ url_for('login_google') }}" class="btn-login desktop-only">Login</a>
                         {% endif %}
                     </div>
                 </div>
@@ -472,27 +482,46 @@
                     <button class="mobile-nav-link" onclick="openPopup('help')">Help</button>
                     {% if session.get('user_id') %}
                     <hr class="mobile-nav-divider">
-                    <span class="mobile-nav-user">{{ session.username }}</span>
-                    <a href="{{ url_for('logout') }}" class="mobile-nav-link mobile-nav-logout">Logout</a>
+                    <div class="mobile-user-row">
+                        {% if session.get('role') == 'admin' %}
+                        <a href="{{ url_for('admin_panel') }}" target="_blank" rel="noopener noreferrer" class="mobile-nav-user" style="text-decoration:none; color:#ffffff;" title="Open Admin Panel in new tab">{{ session.name or session.email }}</a>
+                        {% else %}
+                        <span class="mobile-nav-user">{{ session.name or session.email }}</span>
+                        {% endif %}
+                        <a href="{{ url_for('logout') }}" class="mobile-logout-btn" title="Logout" aria-label="Logout">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                        </a>
+                    </div>
                     {% else %}
                     <hr class="mobile-nav-divider">
-                    <a href="{{ url_for('login') }}" class="mobile-nav-link mobile-nav-login">Login</a>
+                    <a href="{{ url_for('login_google') }}" class="mobile-nav-link mobile-nav-login">Login</a>
                     {% endif %}
                 </nav>
             </div>
         </div>
     </header>
 
+    <!-- ==================== PAGE HEADER ==================== -->
+    <section class="page-header">
+        <div class="container">
+            <div class="breadcrumb">
+                <a href="{{ url_for('home') }}">Home</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-current">Upload Paper</span>
+            </div>
+            <h1 class="page-title">Submit a Question Paper</h1>
+            <p class="page-description">
+                Help your classmates prepare better. Upload any previous year paper — our team reviews it before it goes live.
+            </p>
+        </div>
+    </section>
+
     <!-- ==================== UPLOAD PAGE ==================== -->
     <div class="upload-page-wrap">
-
-        <div class="up-page-header">
-            <div class="up-badge">
-                Community Contribution
-            </div>
-            <h1>Submit a <span>Question Paper</span></h1>
-            <p>Help your classmates prepare better. Upload any previous year paper — our team reviews it before it goes live.</p>
-        </div>
 
         {% if success %}
         <!-- SUCCESS (centred, full width) -->
@@ -529,6 +558,7 @@
             <!-- LEFT: Upload Form -->
             <div class="up-card">
                 <form method="POST" enctype="multipart/form-data" id="uploadForm" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <div class="up-grid">
 
@@ -537,12 +567,21 @@
                             <label class="up-label" for="department">Department</label>
                             <select name="department" id="department" class="up-control" required>
                                 <option value="">— Select department —</option>
-                                {% for slug, name in departments.items() %}
-                                <option value="{{ name }}"
-                                    {% if request.form.get('department') == name %}selected{% endif %}>
-                                    {{ name }}
-                                </option>
-                                {% endfor %}
+                                {% if departments_list %}
+                                    {% for d in departments_list %}
+                                    <option value="{{ d.name }}" data-stream="{{ d.stream }}" data-slug="{{ d.slug }}"
+                                        {% if request.form.get('department') == d.name %}selected{% endif %}>
+                                        {{ d.name }}
+                                    </option>
+                                    {% endfor %}
+                                {% else %}
+                                    {% for slug, name in departments.items() %}
+                                    <option value="{{ name }}"
+                                        {% if request.form.get('department') == name %}selected{% endif %}>
+                                        {{ name }}
+                                    </option>
+                                    {% endfor %}
+                                {% endif %}
                             </select>
                         </div>
 
@@ -600,26 +639,13 @@
                                 <input type="file" name="file" id="fileInput" accept=".pdf,application/pdf" required />
                                 <svg class="up-dz-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" id="dzIcon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                                 <div class="up-dz-title" id="dzTitle">Click to choose or drag &amp; drop</div>
-                                <div class="up-dz-hint" id="dzHint">PDF only · Max 20 MB</div>
+                                <div class="up-dz-hint" id="dzHint">PDF only · Max 5 MB</div>
                                 <div class="up-dz-file" id="dzFilename">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
                                     <span id="dzFilenameText"></span>
                                     <button type="button" class="up-dz-remove" id="dzRemove" title="Remove">✕</button>
                                 </div>
                             </div>
-                        </div>
-
-                        <!-- PDF Compression Option -->
-                        <div class="up-group full" style="margin-top: 0.5rem;">
-                            <label class="up-compress-option" style="display:flex; align-items:center; gap:0.75rem; cursor:pointer; background:#f8fafc; border:1px solid #e2e8f0; padding:0.85rem 1rem; border-radius:12px; transition:all 0.2s ease;">
-                                <input type="checkbox" name="compress_pdf" value="true" id="compressPdf" checked style="width:18px; height:18px; accent-color:#6366f1; cursor:pointer; flex-shrink:0;" />
-                                <div style="display:flex; flex-direction:column;">
-                                    <span style="font-size:0.875rem; font-weight:700; color:#1e293b; display:flex; align-items:center; gap:0.35rem;">
-                                        ⚡ Compress Scanned PDF <span style="font-size:0.72rem; background:#e0e7ff; color:#4338ca; padding:0.15rem 0.5rem; border-radius:999px; font-weight:700;">Recommended</span>
-                                    </span>
-                                    
-                                </div>
-                            </label>
                         </div>
 
                     </div>
@@ -675,8 +701,8 @@
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/></svg>
                         </div>
                         <div class="up-guide-text">
-                            <strong>Compress Files Under 1 MB</strong>
-                            <p>Please compress your scanned PDF files to be under 1 MB using free online compression tools (e.g., ILovePDF or Smallpdf) before submitting.</p>
+                            <strong>Keep Files Under 5 MB</strong>
+                            <p>Maximum upload size is 5 MB. If your scanned PDF is larger, compress it using free tools like ILovePDF or Smallpdf before submitting.</p>
                         </div>
                     </div>
 
@@ -789,13 +815,57 @@
         const submitBtn  = document.getElementById('submitBtn');
         const form       = document.getElementById('uploadForm');
 
-        /* ── Subject filter: by Department + Semester ── */
-        const deptSel    = document.getElementById('department');
-        const semSel     = document.getElementById('semester');
-        const subjectSel = document.getElementById('subject_id');
+        /* ── Subject & Exam Type filter: by Department + Semester ── */
+        const deptSel     = document.getElementById('department');
+        const semSel      = document.getElementById('semester');
+        const subjectSel  = document.getElementById('subject_id');
+        const examTypeSel = document.getElementById('exam_type');
 
         // Store all original options (built from Jinja) so we can restore/filter
         const allSubjectOptions = Array.from(subjectSel.querySelectorAll('option[value]:not([value=""])'));
+
+        function updateSemesterOptions() {
+            if (!deptSel || !semSel) return;
+            const selectedOpt = deptSel.options[deptSel.selectedIndex];
+            const stream = selectedOpt ? (selectedOpt.getAttribute('data-stream') || 'FYUGP') : 'FYUGP';
+            const maxSem = stream === '5year' ? 10 : 8;
+            const curVal = semSel.value || "{{ request.form.get('semester', '') }}";
+
+            semSel.innerHTML = '<option value="">— Select semester —</option>';
+            for (let i = 1; i <= maxSem; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `Semester ${i}`;
+                if (String(curVal) === String(i)) opt.selected = true;
+                semSel.appendChild(opt);
+            }
+        }
+
+        function updateExamTypes() {
+            if (!deptSel || !examTypeSel) return;
+            const selectedOpt = deptSel.options[deptSel.selectedIndex];
+            const stream = selectedOpt ? (selectedOpt.getAttribute('data-stream') || 'FYUGP') : 'FYUGP';
+            const curVal = examTypeSel.value || "{{ request.form.get('exam_type', '') }}";
+            examTypeSel.innerHTML = '<option value="">— Select exam type —</option>';
+
+            if (stream === '5year') {
+                ['CA-1', 'CA-2', 'CA-3', 'SEM-Final'].forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t;
+                    opt.textContent = t;
+                    if (t === curVal) opt.selected = true;
+                    examTypeSel.appendChild(opt);
+                });
+            } else {
+                ['SEA I', 'SEA II', 'ISA'].forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t;
+                    opt.textContent = t;
+                    if (t === curVal) opt.selected = true;
+                    examTypeSel.appendChild(opt);
+                });
+            }
+        }
 
         function filterSubjects() {
             const dept = deptSel.value;
@@ -824,13 +894,19 @@
             subjectSel.value = '';
         }
 
-        deptSel.addEventListener('change', filterSubjects);
-        semSel.addEventListener('change',  filterSubjects);
+        deptSel.addEventListener('change', () => {
+            updateSemesterOptions();
+            filterSubjects();
+            updateExamTypes();
+        });
+        semSel.addEventListener('change', filterSubjects);
 
         // Restore state on page reload with server-side form values
         (function restoreFormState() {
             const savedDept = deptSel.value;
             const savedSem  = semSel.value;
+            updateSemesterOptions();
+            updateExamTypes();
             if (savedDept && savedSem) {
                 filterSubjects();
                 // Re-select the previously submitted subject_id
@@ -845,8 +921,8 @@
             if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
                 alert('Only PDF files are allowed.'); fileInput.value = ''; return;
             }
-            if (file.size > 20 * 1024 * 1024) {
-                alert('File too large. Max 20 MB.'); fileInput.value = ''; return;
+            if (file.size > 5 * 1024 * 1024) {
+                alert('File too large. Maximum PDF size is 5 MB.'); fileInput.value = ''; return;
             }
             dzText.textContent = file.name;
             dzFilename.classList.add('visible');
@@ -901,22 +977,27 @@
 
             if (overlay) {
                 overlay.style.display = 'flex';
-                let progress = 15;
+                let progress = 20;
                 if (progressEl) progressEl.style.width = progress + '%';
                 
                 const interval = setInterval(() => {
-                    progress += Math.floor(Math.random() * 8) + 4;
+                    progress += Math.floor(Math.random() * 10) + 5;
                     if (progress > 90) progress = 92;
                     if (progressEl) progressEl.style.width = progress + '%';
                     
-                    if (progress > 25 && progress <= 60) {
-                        if (statusEl) statusEl.textContent = compressChecked ? 'Optimizing & compressing scanned PDF...' : 'Reading PDF file contents...';
-                    } else if (progress > 60) {
-                        if (statusEl) statusEl.textContent = 'Uploading paper & saving submission record...';
+                    if (progress > 50 && statusEl) {
+                        statusEl.textContent = 'Uploading paper & saving submission record...';
                     }
-                }, 350);
+                }, 300);
             }
         });
+    </script>
+    <script>
+        /* ── Scroll reveal for page-header ── */
+        const _revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+        }, { threshold: 0.12 });
+        document.querySelectorAll('.reveal, .reveal-left, .reveal-right').forEach(el => _revealObserver.observe(el));
     </script>
 </body>
 </html>
