@@ -245,22 +245,47 @@
     <!-- ==================== PAGE HEADER ==================== -->
     <section class="page-header">
         <div class="container">
-            <div class="breadcrumb">
+            <div class="breadcrumb reveal">
                 <a href="{{ url_for('home') }}">Home</a>
                 <span class="breadcrumb-separator">/</span>
                 <span class="breadcrumb-current">Browse Papers</span>
             </div>
-            <h1 class="page-title">Browse by Department</h1>
-            <p class="page-description">
-                Select your department to explore semester folders and previous year question papers.
-            </p>
+
+            <!-- Title left · Search right -->
+            <div class="page-header-top">
+                <div class="page-header-left">
+                    <h1 class="page-title reveal">Browse by Department</h1>
+                    <p class="page-description reveal">
+                        Select your department to explore semester folders and previous year question papers.
+                    </p>
+                </div>
+
+                <!-- Search + chips on the right -->
+                <div class="search-hero-wrap reveal">
+                    <div class="search-hero-box" id="searchHeroBox">
+                        <svg class="search-hero-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        <input type="text" id="deptSearch" class="search-hero-input"
+                               placeholder="Search department…"
+                               aria-label="Search department by name or code"
+                               autocomplete="off">
+                        <button class="search-hero-clear" id="searchClearBtn" title="Clear search" style="display:none;" aria-label="Clear search">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </section>
 
     <!-- ==================== MAIN ==================== -->
     <div class="dept-home-wrap">
         <div class="container">
-            <div class="dept-grid">
+            <div class="dept-grid" id="deptGrid">
             {% set color_palette = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1', '#f97316', '#14b8a6', '#a855f7'] %}
             {% set dept_meta = {
                 'bca':      {'label': 'Bachelor of Computer Applications', 'color': '#3b82f6'},
@@ -277,9 +302,16 @@
             {% set meta = dept_meta.get(slug, {}) %}
             {% set label_str = meta.label if meta.label is defined else (dept.description if dept.description is defined and dept.description else name) %}
             {% set fill_color = meta.color if meta.color is defined else default_color %}
+            {% set code_str = dept.code if dept.code is defined and dept.code else '' %}
+            {% set stream_str = dept.stream if dept.stream is defined and dept.stream else '' %}
 
             <a href="{{ url_for('view_papers_by_department', department=slug) }}"
-               class="dept-folder-card reveal" style="--dc: {{ fill_color }};" data-reveal-delay="{{ loop.index0 * 60 }}">
+               class="dept-folder-card reveal" style="--dc: {{ fill_color }};" data-reveal-delay="{{ loop.index0 * 60 }}"
+               data-dept-name="{{ name|lower }}"
+               data-dept-slug="{{ slug|lower }}"
+               data-dept-code="{{ code_str|lower }}"
+               data-dept-label="{{ label_str|lower }}"
+               data-dept-stream="{{ stream_str|lower }}">
 
                 <!-- Standard Premium Folder SVG -->
                 <svg class="dept-folder-icon" viewBox="0 0 64 56" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -316,9 +348,23 @@
                 </svg>
             </a>
             {% endfor %}
+            </div>
+
+            <div id="deptNoResults" style="display:none; text-align:center; padding:3.5rem 1rem; width:100%;">
+                <div style="display:inline-flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:50%; background:#F3F4F6; color:#9CA3AF; margin-bottom:0.75rem;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </div>
+                <h3 style="font-family:'Space Grotesk', sans-serif; font-size:1.15rem; font-weight:700; color:#111827; margin-bottom:0.35rem;">No departments found</h3>
+                <p style="color:#6B7280; font-size:0.9rem; margin-bottom:1rem;">No department matches "<span id="deptQueryText" style="font-weight:600; color:#111827;"></span>"</p>
+                <button type="button" class="btn btn-secondary" onclick="clearDeptSearch()" style="padding:0.4rem 1.1rem; font-size:0.85rem; border-radius:10px; cursor:pointer;">
+                    Clear search
+                </button>
+            </div>
         </div>
     </div>
-</div>
 
     <!-- ==================== FOOTER ==================== -->
     <footer class="mini-footer">
@@ -389,6 +435,61 @@
             if (delay) el.style.transitionDelay = delay + 'ms';
             _revealObs.observe(el);
         });
+
+        /* ── Department Instant Search ── */
+        const deptSearchInput = document.getElementById('deptSearch');
+        const deptSearchClearBtn = document.getElementById('searchClearBtn');
+        const deptCards = document.querySelectorAll('.dept-folder-card');
+        const deptNoResults = document.getElementById('deptNoResults');
+        const deptQueryText = document.getElementById('deptQueryText');
+
+        function filterDepartments() {
+            const q = (deptSearchInput ? deptSearchInput.value : '').trim().toLowerCase();
+            if (deptSearchClearBtn) {
+                deptSearchClearBtn.style.display = q ? 'flex' : 'none';
+            }
+
+            let visibleCount = 0;
+            deptCards.forEach(card => {
+                const name   = card.getAttribute('data-dept-name') || '';
+                const code   = card.getAttribute('data-dept-code') || '';
+                const slug   = card.getAttribute('data-dept-slug') || '';
+                const label  = card.getAttribute('data-dept-label') || '';
+                const stream = card.getAttribute('data-dept-stream') || '';
+
+                const matches = !q || name.includes(q) || code.includes(q) || slug.includes(q) || label.includes(q) || stream.includes(q);
+                card.style.display = matches ? '' : 'none';
+                if (matches) visibleCount++;
+            });
+
+            if (deptNoResults) {
+                deptNoResults.style.display = (visibleCount === 0 && q) ? 'block' : 'none';
+                if (deptQueryText) deptQueryText.textContent = q;
+            }
+        }
+
+        if (deptSearchInput) {
+            deptSearchInput.addEventListener('input', filterDepartments);
+            deptSearchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') clearDeptSearch();
+            });
+        }
+
+        window.clearDeptSearch = function() {
+            if (deptSearchInput) {
+                deptSearchInput.value = '';
+                deptSearchInput.focus();
+                filterDepartments();
+            }
+        };
+
+        window.setSearch = function(term) {
+            if (deptSearchInput) {
+                deptSearchInput.value = term;
+                deptSearchInput.focus();
+                filterDepartments();
+            }
+        };
     </script>
 </body>
 </html>
