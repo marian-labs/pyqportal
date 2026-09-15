@@ -1036,6 +1036,7 @@
             </button>
         </div>
         <form id="departmentForm" onsubmit="submitDepartment(event)">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="department_id" id="deptFormId">
             <div class="modal-body">
                 <div class="form-group">
@@ -1160,6 +1161,7 @@
         <div class="modal-body">
             <div id="editSubjectAlert"></div>
             <form id="editSubjectForm" onsubmit="submitEditSubject(event)">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="subject_id" id="editSubjectId">
                 <div class="form-group">
                     <label class="form-label">Subject Name <span style="color:var(--accent-red)">*</span></label>
@@ -1365,7 +1367,9 @@ function openEditDepartmentModal(d) {
 async function submitDepartment(e) {
     e.preventDefault();
     const deptId = document.getElementById('deptFormId').value;
+    const csrfToken = getCsrf();
     const data = {
+        csrf_token: csrfToken,
         id: deptId ? parseInt(deptId) : null,
         name: document.getElementById('deptFormName').value.trim(),
         slug: document.getElementById('deptFormSlug').value.trim().toLowerCase(),
@@ -1379,10 +1383,14 @@ async function submitDepartment(e) {
     try {
         const res = await fetch('/admin/api/departments', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-CSRF-Token': csrfToken
+            },
             body: JSON.stringify(data)
         });
-        const result = await res.json();
+        const result = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(result.error || 'Failed to save department');
 
         toast(result.message || 'Department saved successfully!');
@@ -1399,8 +1407,13 @@ function confirmDeleteDepartment(id, name) {
     document.getElementById('deleteModalBody').textContent = `Are you sure you want to delete department "${name}"? This cannot be undone.`;
     document.getElementById('confirmDeleteBtn').onclick = async function() {
         try {
-            const res = await fetch(`/admin/api/departments/${id}`, { method: 'DELETE' });
-            const result = await res.json();
+            const res = await fetch(`/admin/api/departments/${id}`, { 
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': getCsrf()
+                }
+            });
+            const result = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(result.error || 'Delete failed');
             toast(result.message || 'Department deleted');
             closeModal('modalConfirmDelete');
@@ -1973,7 +1986,10 @@ function alertHtml(type, msg) {
 
 function getCsrf() {
     const meta = document.querySelector('meta[name="csrf-token"]');
-    return meta ? meta.content : '';
+    if (meta && meta.content) return meta.content;
+    const input = document.querySelector('input[name="csrf_token"]');
+    if (input && input.value) return input.value;
+    return '';
 }
 
 // ===== INIT =====

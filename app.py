@@ -16,7 +16,7 @@ from supabase import create_client
 from authlib.integrations.flask_client import OAuth
 from psycopg2.extras import execute_values
 from werkzeug.middleware.proxy_fix import ProxyFix
-from flask_wtf.csrf import CSRFProtect, generate_csrf
+from flask_wtf.csrf import CSRFProtect, generate_csrf, CSRFError
 from werkzeug.exceptions import RequestEntityTooLarge
 from urllib.parse import urlparse, urljoin
 
@@ -79,6 +79,18 @@ def handle_large_file(e):
         return jsonify({"error": "File is too large."}), 413
     flash("File is too large. Maximum size is 25MB.", "error")
     return redirect(request.referrer or url_for("home"))
+
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    if (
+        request.is_json
+        or request.path.startswith("/admin/api/")
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or "application/json" in request.headers.get("Accept", "")
+    ):
+        return jsonify({"error": f"CSRF validation failed: {e.description}"}), 400
+    return f"Bad Request: {e.description}", 400
 
 
 oauth = OAuth(app)
@@ -152,11 +164,28 @@ init_db()
 # ---------- Auth helpers ----------
 
 
+def is_api_request():
+    return bool(
+        request.path.startswith("/admin/api/")
+        or request.is_json
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or "application/json" in request.headers.get("Accept", "")
+    )
+
+
+@app.before_request
+def extract_csrf_from_json():
+    if request.is_json and not request.headers.get("X-CSRFToken"):
+        data = request.get_json(silent=True)
+        if isinstance(data, dict) and data.get("csrf_token"):
+            request.environ["HTTP_X_CSRFTOKEN"] = data["csrf_token"]
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if "user_id" not in session:
-            if request.headers.get("X-Requested-With") == "XMLHttpRequest" or "application/json" in request.headers.get("Accept", ""):
+            if is_api_request():
                 return jsonify({"error": "Please sign in"}), 401
             # Store the destination, flash a message, bounce to home so user sees it
             session["post_login_redirect"] = request.url
@@ -173,7 +202,7 @@ def login_required(f):
             return_db(conn)
         if not row or row[0] != session.get("token_version"):
             session.clear()
-            if request.headers.get("X-Requested-With") == "XMLHttpRequest" or "application/json" in request.headers.get("Accept", ""):
+            if is_api_request():
                 return jsonify({"error": "Please sign in"}), 401
             session["post_login_redirect"] = request.url
             flash("Your session has expired. Please sign in again.", "auth")
@@ -187,6 +216,8 @@ def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if session.get('role') != 'admin':
+            if is_api_request():
+                return jsonify({"error": "Administrator access required"}), 403
             flash('Administrator access required.')
             return redirect(url_for('home'))
         return f(*args, **kwargs)
@@ -1563,11 +1594,15 @@ def proxy_pdf():
 
 @app.errorhandler(404)
 def page_not_found(e):
+    if is_api_request():
+        return jsonify({"error": "Resource not found"}), 404
     return render_template('404.html'), 404
 
 
 @app.errorhandler(500)
 def server_error(e):
+    if is_api_request():
+        return jsonify({"error": "Internal server error"}), 500
     return render_template('500.html'), 500
 
 
