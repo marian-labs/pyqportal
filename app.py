@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 import os
 import re
 import time
+import threading
 from werkzeug.utils import secure_filename
 from functools import wraps
 import uuid
@@ -38,6 +39,7 @@ from models import (
     get_subjects,
     get_department_papers,
     get_department_papers_and_subjects,
+    check_duplicate_paper,
 )
 
 app = Flask(__name__)
@@ -69,8 +71,12 @@ csrf = CSRFProtect(app)
 
 @app.context_processor
 def inject_csrf_token():
-    # Makes {{ csrf_token() }} available in every template
-    return dict(csrf_token=generate_csrf)
+    # Makes {{ csrf_token() }} and {{ upload_years }} available in every template
+    import datetime
+    now_year = datetime.datetime.now().year
+    max_year = max(2028, now_year)
+    years = list(range(2024, max_year + 1))
+    return dict(csrf_token=generate_csrf, current_year=now_year, upload_years=years)
 
 
 @app.errorhandler(RequestEntityTooLarge)
@@ -109,14 +115,14 @@ def apply_security_headers(response):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Permissions-Policy"] = "camera=(self), geolocation=(), microphone=()"
 
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.googletagmanager.com; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.googletagmanager.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
-        "img-src 'self' data:; "
+        "img-src 'self' data: blob:; "
         "connect-src 'self' https://www.google-analytics.com https://*.supabase.co; "
         "frame-src https://*.supabase.co; "
         "object-src 'none'; "
@@ -281,6 +287,7 @@ def format_file_size(size_bytes):
         return f"{size:.1f} TB"
     except (ValueError, TypeError):
         return "—"
+
 
 
 def analyze_with_gemini(pdf_url, subject_name):
@@ -480,13 +487,17 @@ def upload_page():
                 return render_template("upload.html", error="Invalid subject", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
             cur.execute(
-                "SELECT subject_id, subject_name FROM subjects WHERE subject_id = %s",
+                "SELECT subject_id, subject_name, semester, COALESCE(course_type, 'CORE') FROM subjects WHERE subject_id = %s",
                 (subject_id,)
             )
             row = cur.fetchone()
             if not row:
                 return render_template("upload.html", error="Subject not found.", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
-            subject_id, subject_name = row[0], row[1]
+            subject_id, subject_name, subj_sem, subj_ctype = row
+            if subj_ctype in ('AEC', 'MDC') and subj_sem not in (1, 2):
+                return render_template("upload.html", error="AEC and MDC papers can only be for Semester 1 or 2.", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            if subj_ctype == 'VAC' and subj_sem not in (3, 4):
+                return render_template("upload.html", error="VAC papers can only be for Semester 3 or 4.", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
             year = request.form.get("year")
             try:
@@ -505,6 +516,12 @@ def upload_page():
 
             exam_type = request.form.get(
                 "examType") or request.form.get("exam_type") or ""
+            exam_type = exam_type.strip()
+
+            # Duplicate check in question_papers
+            dup_check = check_duplicate_paper(subject_id, year_int, exam_type, include_pending=False)
+            if dup_check["is_duplicate"]:
+                return render_template("upload.html", error=dup_check["message"], subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
             file_bytes = file.read()
             # 5 MB server-side cap for PDF uploads
@@ -696,23 +713,54 @@ def analyze_paper(paper_id):
         return_db(conn)
 
 # ================================================================
+# DUPLICATE PAPER CHECK API
+# ================================================================
+
+@app.route("/api/check-paper-duplicate")
+def api_check_paper_duplicate():
+    """
+    Real-time check whether a paper with the given subject, year, and exam_type
+    is already uploaded or pending review.
+    """
+    subject_raw = request.args.get("subject_id", "").strip()
+    year_raw = request.args.get("year", "").strip()
+    exam_type = request.args.get("exam_type") or request.args.get("examType") or ""
+    exam_type = exam_type.strip()
+
+    if not subject_raw or not year_raw or not exam_type:
+        return jsonify({"is_duplicate": False, "status": None, "message": ""})
+
+    try:
+        subject_id = int(subject_raw)
+        year_int = int(str(year_raw).split("-", 1)[0].strip()) if "-" in str(year_raw) else int(year_raw)
+        if not (2000 <= year_int <= 2100):
+            return jsonify({"is_duplicate": False, "status": None, "message": ""})
+    except (ValueError, TypeError):
+        return jsonify({"is_duplicate": False, "status": None, "message": ""})
+
+    include_pending = request.args.get("include_pending", "true").lower() in ("true", "1", "yes")
+    result = check_duplicate_paper(subject_id, year_int, exam_type, include_pending=include_pending)
+    return jsonify(result)
+
+
+# ================================================================
 # USER UPLOAD (STAGING)
 # ================================================================
 
 @app.route("/user-upload", methods=["GET", "POST"])
 @login_required
-@limiter.limit("5 per hour", methods=["POST"], key_func=get_user_rate_limit_key)
+@limiter.limit("15 per hour", methods=["POST"], key_func=get_user_rate_limit_key)
 def user_upload():
     departments_list = get_departments(active_only=True)
     depts_dict = get_departments_dict(departments_list)
     if request.method == "POST":
         subject_raw = request.form.get("subject_id", "").strip()
         year = request.form.get("year", "").strip()
-        exam_type = request.form.get("exam_type", "").strip()
+        exam_type = (request.form.get("exam_type") or request.form.get("examType") or "").strip()
         file = request.files.get("file")
 
         # --- Validate ---
-        if not subject_raw or not year or not file or not file.filename:
+        if not subject_raw or not year or not exam_type or not file or not file.filename:
             return render_template("user_upload.html",
                                    error="All fields are required.",
                                    subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
@@ -728,6 +776,39 @@ def user_upload():
         except ValueError:
             return render_template("user_upload.html",
                                    error="Invalid subject or year.",
+                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+
+        # Validate subject semester and course_type rules
+        conn_v = get_db()
+        cur_v = conn_v.cursor()
+        try:
+            cur_v.execute(
+                "SELECT semester, COALESCE(course_type, 'CORE') FROM subjects WHERE subject_id = %s",
+                (subject_id,)
+            )
+            s_row = cur_v.fetchone()
+            if not s_row:
+                return render_template("user_upload.html",
+                                       error="Subject not found.",
+                                       subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            subj_sem, subj_ctype = s_row
+            if subj_ctype in ('AEC', 'MDC') and subj_sem not in (1, 2):
+                return render_template("user_upload.html",
+                                       error="AEC and MDC subjects are only allowed for Semester 1 and 2.",
+                                       subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            if subj_ctype == 'VAC' and subj_sem not in (3, 4):
+                return render_template("user_upload.html",
+                                       error="VAC subjects are only allowed for Semester 3 and 4.",
+                                       subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+        finally:
+            cur_v.close()
+            return_db(conn_v)
+
+        # Duplicate check (checks both published papers and pending papers)
+        dup_check = check_duplicate_paper(subject_id, year_int, exam_type, include_pending=True)
+        if dup_check["is_duplicate"]:
+            return render_template("user_upload.html",
+                                   error=dup_check["message"],
                                    subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
         # --- Upload to staging bucket ---
@@ -756,12 +837,13 @@ def user_upload():
         try:
             original_filename = secure_filename(file.filename)
             submitted_by_ip = get_remote_address()
+            user_id = session.get("user_id")
             cur.execute("""
                 INSERT INTO pending_papers
-                (subject_id, year, exam_type, file_name, staging_path, submitted_by_ip, file_size)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (subject_id, year, exam_type, file_name, staging_path, submitted_by_ip, file_size, user_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (subject_id, year_int, exam_type, original_filename,
-                  staging_path, submitted_by_ip, len(file_bytes)))
+                  staging_path, submitted_by_ip, len(file_bytes), user_id))
             conn.commit()
             return render_template("user_upload.html", success=True,
                                    subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
@@ -796,10 +878,12 @@ def admin_get_pending():
         cur.execute("""
             SELECT p.id, s.subject_name, s.semester, p.year, p.exam_type,
                    p.file_name, p.staging_path, p.submitted_by_ip,
-                   p.submitted_at, p.status, p.file_size
+                   p.submitted_at, p.status, p.file_size,
+                   u.name, u.email, u.username
             FROM pending_papers p
             LEFT JOIN subjects s ON p.subject_id = s.subject_id
-            WHERE p.status = 'pending'
+            LEFT JOIN users u ON p.user_id = u.user_id
+            WHERE p.status IN ('pending', 'processing')
             ORDER BY p.submitted_at DESC
         """)
         rows = cur.fetchall()
@@ -808,6 +892,8 @@ def admin_get_pending():
         for r in rows:
             staging_path = r[6]
             file_size_bytes = r[10]
+            uploader_name = r[11] or r[13] or (r[12].split("@")[0] if r[12] else None)
+            uploader_email = r[12]
 
             # Auto-fill file_size from Supabase storage if missing in DB
             if (file_size_bytes is None or file_size_bytes == 0) and staging_path:
@@ -847,7 +933,9 @@ def admin_get_pending():
                 "status": r[9],
                 "file_size": file_size_bytes,
                 "formatted_file_size": format_file_size(file_size_bytes),
-                "preview_url": preview_url
+                "preview_url": preview_url,
+                "uploader_name": uploader_name,
+                "uploader_email": uploader_email,
             })
 
         if pending_size_updates:
@@ -864,64 +952,216 @@ def admin_get_pending():
         return_db(conn)
 
 
+# Thread-safe in-memory store for tracking background approval tasks
+_approval_tasks = {}
+_approval_lock = threading.Lock()
+
+
+def _run_approval_background(app_obj, pending_id, subject_id, year, exam_type, file_name, staging_path, submitter_user_id):
+    """
+    Executes PDF download from staging, Supabase storage upload,
+    and database insertion in a background worker thread.
+    """
+    with app_obj.app_context():
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            # 1. Download file from staging bucket
+            file_bytes = staging_supabase.storage.from_(STAGING_BUCKET).download(staging_path)
+
+            # 2. Upload directly to main public bucket
+            final_path = f"{subject_id}/{year}/{uuid.uuid4()}.pdf"
+            supabase.storage.from_(SUPABASE_BUCKET).upload(
+                final_path,
+                file_bytes,
+                file_options={"content-type": "application/pdf"}
+            )
+            final_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(final_path)
+
+            # 3. Insert into question_papers
+            cur.execute("""
+                INSERT INTO question_papers
+                (subject_id, year, file_name, file_url, exam_type, public_id, file_size, user_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (subject_id, year, file_name, final_url, exam_type, final_path, len(file_bytes), submitter_user_id))
+
+            # 4. Mark pending_papers record as approved
+            cur.execute(
+                "UPDATE pending_papers SET status = 'approved', file_size = %s WHERE id = %s",
+                (len(file_bytes), pending_id)
+            )
+
+            # 5. Increment user's approved_papers_count if submitted by a registered user
+            if submitter_user_id:
+                cur.execute("""
+                    UPDATE users
+                    SET approved_papers_count = COALESCE(approved_papers_count, 0) + 1
+                    WHERE user_id = %s
+                """, (submitter_user_id,))
+
+            auto_remove_department_coming_soon(cur, subject_id)
+            conn.commit()
+            clear_departments_cache()
+
+            # 6. Delete from staging bucket (non-critical)
+            try:
+                staging_supabase.storage.from_(STAGING_BUCKET).remove([staging_path])
+            except Exception:
+                pass
+
+            # Update in-memory task status to completed
+            with _approval_lock:
+                _approval_tasks[pending_id] = {
+                    "status": "completed",
+                    "file_name": file_name,
+                    "message": "Paper approved and published successfully.",
+                    "completed_at": time.time()
+                }
+
+        except Exception as e:
+            conn.rollback()
+            app_obj.logger.exception(f"Background approval failed for pending_id {pending_id}: {e}")
+            try:
+                cur.execute("UPDATE pending_papers SET status = 'pending' WHERE id = %s", (pending_id,))
+                conn.commit()
+            except Exception:
+                pass
+
+            with _approval_lock:
+                _approval_tasks[pending_id] = {
+                    "status": "failed",
+                    "file_name": file_name,
+                    "error": str(e),
+                    "completed_at": time.time()
+                }
+        finally:
+            cur.close()
+            return_db(conn)
+
+
 @app.route("/admin/api/pending/<int:pending_id>/approve", methods=["POST"])
 @login_required
 @admin_required
 def approve_pending(pending_id):
+    # Check if task is already running in background
+    with _approval_lock:
+        task = _approval_tasks.get(pending_id)
+        if task and task.get("status") == "processing":
+            return jsonify({
+                "status": "processing",
+                "message": "This submission is already being processed in the background."
+            }), 200
+
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT p.subject_id, p.year, p.exam_type, p.file_name, p.staging_path
+            SELECT p.subject_id, p.year, p.exam_type, p.file_name, p.staging_path, p.user_id
             FROM pending_papers p
-            WHERE p.id = %s AND p.status = 'pending'
+            WHERE p.id = %s AND p.status IN ('pending', 'processing')
         """, (pending_id,))
         row = cur.fetchone()
         if not row:
             return jsonify({"error": "Pending paper not found"}), 404
 
-        subject_id, year, exam_type, file_name, staging_path = row
+        subject_id, year, exam_type, file_name, staging_path, submitter_user_id = row
 
-        # 1. Download from staging
-        file_bytes = staging_supabase.storage.from_(STAGING_BUCKET).download(staging_path)
+        # Support overriding/setting exam_type from request body if admin updated it
+        req_data = request.get_json(silent=True) or {}
+        override_exam_type = req_data.get("exam_type")
+        if override_exam_type and override_exam_type.strip():
+            exam_type = override_exam_type.strip()
+            cur.execute("UPDATE pending_papers SET exam_type = %s WHERE id = %s", (exam_type, pending_id))
 
-        # 2. Upload to main bucket
-        final_path = f"{subject_id}/{year}/{uuid.uuid4()}.pdf"
-        supabase.storage.from_(SUPABASE_BUCKET).upload(
-            final_path,
-            file_bytes,
-            file_options={"content-type": "application/pdf"}
-        )
-        final_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(final_path)
+        # Check duplicate before publishing to question_papers
+        dup_check = check_duplicate_paper(subject_id, year, exam_type, include_pending=False)
+        if dup_check["is_duplicate"]:
+            return jsonify({"error": "Already this paper is uploaded and published."}), 400
 
-        # 3. Insert into question_papers
-        cur.execute("""
-            INSERT INTO question_papers
-            (subject_id, year, file_name, file_url, exam_type, public_id, file_size)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (subject_id, year, file_name, final_url, exam_type, final_path, len(file_bytes)))
-
-        # 4. Mark as approved
-        cur.execute(
-            "UPDATE pending_papers SET status = 'approved' WHERE id = %s",
-            (pending_id,)
-        )
-        auto_remove_department_coming_soon(cur, subject_id)
+        # Mark database status as processing to prevent race conditions
+        cur.execute("UPDATE pending_papers SET status = 'processing' WHERE id = %s", (pending_id,))
         conn.commit()
-        clear_departments_cache()
 
-        # 5. Delete from staging (non-critical)
-        try:
-            staging_supabase.storage.from_(STAGING_BUCKET).remove([staging_path])
-        except Exception:
-            pass
+        # Register task in memory
+        with _approval_lock:
+            _approval_tasks[pending_id] = {
+                "status": "processing",
+                "file_name": file_name,
+                "started_at": time.time(),
+                "message": "Compressing and publishing in background..."
+            }
 
-        return jsonify({"message": "Approved and published successfully."})
+        # Spawn background approval worker thread
+        worker = threading.Thread(
+            target=_run_approval_background,
+            args=(
+                app,
+                pending_id,
+                subject_id,
+                year,
+                exam_type,
+                file_name,
+                staging_path,
+                submitter_user_id
+            ),
+            daemon=True
+        )
+        worker.start()
+
+        return jsonify({
+            "status": "processing",
+            "message": "Approval started in background. Compressing and publishing...",
+            "file_name": file_name,
+            "pending_id": pending_id
+        })
 
     except Exception:
         conn.rollback()
-        app.logger.exception("Approve failed")
+        # Also undo the committed status='processing' change so the paper isn't stuck
+        try:
+            cur.execute("UPDATE pending_papers SET status = 'pending' WHERE id = %s", (pending_id,))
+            conn.commit()
+        except Exception:
+            pass
+        # Clear any stale in-memory task entry
+        with _approval_lock:
+            _approval_tasks.pop(pending_id, None)
+        app.logger.exception("Approve start failed")
         return jsonify({"error": "Internal server error. Please try again."}), 500
+    finally:
+        cur.close()
+        return_db(conn)
+
+
+@app.route("/admin/api/pending/<int:pending_id>/status", methods=["GET"])
+@login_required
+@admin_required
+def get_pending_approval_status(pending_id):
+    """
+    Returns the real-time status of a background approval and compression task.
+    """
+    with _approval_lock:
+        task = _approval_tasks.get(pending_id)
+        if task:
+            return jsonify(task)
+
+    # Fallback to DB check
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT status, file_name, file_size FROM pending_papers WHERE id = %s", (pending_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Pending submission not found"}), 404
+        db_status, file_name, file_size = row
+        client_status = "completed" if db_status == "approved" else db_status
+        return jsonify({
+            "status": client_status,
+            "db_status": db_status,
+            "file_name": file_name,
+            "formatted_compressed": format_file_size(file_size) if file_size else "—",
+            "message": f"Submission status is {db_status}"
+        })
     finally:
         cur.close()
         return_db(conn)
@@ -1198,27 +1438,53 @@ def admin_stats():
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT COUNT(*) FROM subjects")
-        total_subjects = cur.fetchone()[0] or 0
-
-        cur.execute("SELECT COUNT(*) FROM question_papers")
-        total_papers = cur.fetchone()[0] or 0
-
-        cur.execute(
-            "SELECT COUNT(*) FROM question_papers WHERE ai_analysis IS NOT NULL")
-        papers_with_ai = cur.fetchone()[0] or 0
-
-        cur.execute(
-            "SELECT COUNT(*) FROM question_papers WHERE upload_date >= NOW() - INTERVAL '30 days'"
-        )
-        recent_uploads = cur.fetchone()[0] or 0
-
+        cur.execute("""
+            SELECT 
+                (SELECT COUNT(*) FROM subjects) AS total_subjects,
+                (SELECT COUNT(*) FROM users) AS total_users,
+                (SELECT COUNT(*) FROM question_papers) AS total_papers,
+                (SELECT COUNT(*) FROM question_papers WHERE ai_analysis IS NOT NULL) AS papers_with_ai,
+                (SELECT COUNT(*) FROM question_papers WHERE upload_date >= NOW() - INTERVAL '30 days') AS recent_uploads;
+        """)
+        row = cur.fetchone()
         return jsonify({
-            "total_subjects": total_subjects,
-            "total_papers": total_papers,
-            "papers_with_ai": papers_with_ai,
-            "recent_uploads": recent_uploads,
+            "total_subjects": row[0] or 0 if row else 0,
+            "total_users": row[1] or 0 if row else 0,
+            "total_papers": row[2] or 0 if row else 0,
+            "papers_with_ai": row[3] or 0 if row else 0,
+            "recent_uploads": row[4] or 0 if row else 0,
         })
+    finally:
+        cur.close()
+        return_db(conn)
+
+
+@app.route("/admin/api/users", methods=["GET"])
+@login_required
+@admin_required
+def admin_get_users():
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT user_id, username, email, name, role, last_login, COALESCE(approved_papers_count, 0)
+            FROM users
+            ORDER BY last_login DESC NULLS LAST, user_id DESC
+        """)
+        rows = cur.fetchall()
+        results = [
+            {
+                "user_id": r[0],
+                "username": r[1],
+                "email": r[2],
+                "name": r[3] or r[1] or (r[2].split("@")[0] if r[2] else "User"),
+                "role": r[4] or "user",
+                "last_login": r[5].isoformat() if r[5] else None,
+                "approved_papers_count": r[6] or 0,
+            }
+            for r in rows
+        ]
+        return jsonify(results)
     finally:
         cur.close()
         return_db(conn)
@@ -1233,10 +1499,11 @@ def admin_get_subjects():
     try:
         cur.execute("""
             SELECT s.subject_id, s.subject_name, s.semester, s.department,
+                   COALESCE(s.course_type, 'CORE') AS course_type,
                    COUNT(q.paper_id) AS paper_count
             FROM subjects s
             LEFT JOIN question_papers q ON q.subject_id = s.subject_id
-            GROUP BY s.subject_id, s.subject_name, s.semester, s.department
+            GROUP BY s.subject_id, s.subject_name, s.semester, s.department, s.course_type
             ORDER BY s.department NULLS LAST, s.semester NULLS LAST, s.subject_name
         """)
         rows = cur.fetchall()
@@ -1246,7 +1513,8 @@ def admin_get_subjects():
                 "subject_name": r[1],
                 "semester": r[2],
                 "department": r[3],
-                "paper_count": r[4],
+                "course_type": r[4],
+                "paper_count": r[5],
             }
             for r in rows
         ])
@@ -1262,30 +1530,63 @@ def admin_create_subject():
     data = request.get_json() or {}
     name = (data.get("subject_name") or "").strip()
     semester = data.get("semester")
+    course_type = (data.get("course_type") or "CORE").strip().upper()
     department = (data.get("department") or "BCA").strip()
 
     if not name:
         return jsonify({"error": "Subject name is required"}), 400
-    if not is_valid_department(department):
-        return jsonify({"error": "Invalid department"}), 400
-    if semester is not None:
+    if course_type not in ('CORE', 'AEC', 'MDC', 'VAC'):
+        return jsonify({"error": "Invalid course type. Must be CORE, AEC, MDC, or VAC"}), 400
+
+    if semester is not None and semester != "":
         try:
             semester = int(semester)
             if not 1 <= semester <= 10:
                 raise ValueError
         except (ValueError, TypeError):
             return jsonify({"error": "Semester must be between 1 and 10"}), 400
+    else:
+        semester = None
 
-    dept_id = get_department_id_by_name_or_slug(department)
-    if dept_id is None:
-        return jsonify({"error": "Invalid department"}), 400
+    if course_type in ('AEC', 'MDC'):
+        if semester not in (1, 2):
+            return jsonify({"error": f"{course_type} subjects are only permitted in Semester 1 or Semester 2"}), 400
+        department = "General"
+        dept_id = None
+    elif course_type == 'VAC':
+        if semester not in (3, 4):
+            return jsonify({"error": "VAC subjects are only permitted in Semester 3 or Semester 4"}), 400
+        department = "General"
+        dept_id = None
+    else: # CORE
+        if not is_valid_department(department) or department.lower() in ('general', 'common'):
+            return jsonify({"error": "Please select a valid department for CORE subjects"}), 400
+        dept_id = get_department_id_by_name_or_slug(department)
+        if dept_id is None:
+            return jsonify({"error": "Invalid department"}), 400
 
     conn = get_db()
     cur = conn.cursor()
     try:
+        # Duplicate check within same scope
+        if course_type in ('AEC', 'MDC', 'VAC'):
+            cur.execute(
+                "SELECT subject_id FROM subjects WHERE LOWER(subject_name) = LOWER(%s) AND semester = %s AND course_type = %s",
+                (name, semester, course_type)
+            )
+            if cur.fetchone():
+                return jsonify({"error": f"Subject '{name}' already exists for Semester {semester} ({course_type})"}), 400
+        else:
+            cur.execute(
+                "SELECT subject_id FROM subjects WHERE LOWER(subject_name) = LOWER(%s) AND semester = %s AND department_id = %s",
+                (name, semester, dept_id)
+            )
+            if cur.fetchone():
+                return jsonify({"error": f"Subject '{name}' already exists for this department and semester"}), 400
+
         cur.execute(
-            "INSERT INTO subjects (subject_name, semester, department, department_id) VALUES (%s, %s, %s, %s) RETURNING subject_id",
-            (name, semester, department, dept_id)
+            "INSERT INTO subjects (subject_name, semester, department, department_id, course_type) VALUES (%s, %s, %s, %s, %s) RETURNING subject_id",
+            (name, semester, department, dept_id, course_type)
         )
         new_id = cur.fetchone()[0]
         conn.commit()
@@ -1295,6 +1596,7 @@ def admin_create_subject():
             "subject_name": name,
             "semester": semester,
             "department": department,
+            "course_type": course_type,
         }), 201
     except Exception:
         conn.rollback()
@@ -1309,21 +1611,16 @@ def admin_create_subject():
 @login_required
 @admin_required
 def admin_bulk_create_subjects():
-    """Insert multiple subjects sharing the same department and semester."""
+    """Insert multiple subjects sharing the same department, semester, and course_type."""
     data = request.get_json() or {}
     names = data.get("subject_names", [])
     semester = data.get("semester")
+    course_type = (data.get("course_type") or "CORE").strip().upper()
     department = (data.get("department") or "BCA").strip()
 
-    # Validate department against live DB data
-    if not is_valid_department(department):
-        return jsonify({"error": "Invalid department"}), 400
+    if course_type not in ('CORE', 'AEC', 'MDC', 'VAC'):
+        return jsonify({"error": "Invalid course type"}), 400
 
-    dept_id = get_department_id_by_name_or_slug(department)
-    if dept_id is None:
-        return jsonify({"error": "Invalid department"}), 400
-
-    # Validate semester
     if semester is not None and semester != "":
         try:
             semester = int(semester)
@@ -1334,21 +1631,33 @@ def admin_bulk_create_subjects():
     else:
         semester = None
 
-    # Clean names — drop empty strings
+    if course_type in ('AEC', 'MDC'):
+        if semester not in (1, 2):
+            return jsonify({"error": f"{course_type} subjects are only permitted in Semester 1 or 2"}), 400
+        department = "General"
+        dept_id = None
+    elif course_type == 'VAC':
+        if semester not in (3, 4):
+            return jsonify({"error": "VAC subjects are only permitted in Semester 3 or 4"}), 400
+        department = "General"
+        dept_id = None
+    else:
+        if not is_valid_department(department) or department.lower() in ('general', 'common'):
+            return jsonify({"error": "Please select a valid department for CORE subjects"}), 400
+        dept_id = get_department_id_by_name_or_slug(department)
+        if dept_id is None:
+            return jsonify({"error": "Invalid department"}), 400
+
     clean_names = [n.strip() for n in names if isinstance(n, str) and n.strip()]
     if not clean_names:
         return jsonify({"error": "At least one subject name is required"}), 400
 
-    # Note: Pre-validating inputs avoids DB-level batch rollbacks. A DB-level constraint failure
-    # (rare, as subjects table has no unique constraint on subject_name) will roll back the batch transaction,
-    # which is acceptable to maintain single round-trip performance.
-
     conn = get_db()
     cur = conn.cursor()
     try:
-        records = [(name, semester, department, dept_id) for name in clean_names]
+        records = [(name, semester, department, dept_id, course_type) for name in clean_names]
         query = """
-            INSERT INTO subjects (subject_name, semester, department, department_id)
+            INSERT INTO subjects (subject_name, semester, department, department_id, course_type)
             VALUES %s
             RETURNING subject_name, subject_id
         """
@@ -1356,7 +1665,6 @@ def admin_bulk_create_subjects():
         conn.commit()
         clear_departments_cache()
 
-        # Match results positionally with input records to preserve duplicate subject names correctly
         results = []
         for i, name in enumerate(clean_names):
             if i < len(inserted_rows):
@@ -1380,30 +1688,47 @@ def admin_update_subject(subject_id):
     data = request.get_json() or {}
     name = (data.get("subject_name") or "").strip()
     semester = data.get("semester")
+    course_type = (data.get("course_type") or "CORE").strip().upper()
     department = (data.get("department") or "BCA").strip()
 
     if not name:
         return jsonify({"error": "Subject name is required"}), 400
-    if not is_valid_department(department):
-        return jsonify({"error": "Invalid department"}), 400
-    if semester is not None:
+    if course_type not in ('CORE', 'AEC', 'MDC', 'VAC'):
+        return jsonify({"error": "Invalid course type. Must be CORE, AEC, MDC, or VAC"}), 400
+
+    if semester is not None and semester != "":
         try:
             semester = int(semester)
             if not 1 <= semester <= 10:
                 raise ValueError
         except (ValueError, TypeError):
             return jsonify({"error": "Semester must be between 1 and 10"}), 400
+    else:
+        semester = None
 
-    dept_id = get_department_id_by_name_or_slug(department)
-    if dept_id is None:
-        return jsonify({"error": "Invalid department"}), 400
+    if course_type in ('AEC', 'MDC'):
+        if semester not in (1, 2):
+            return jsonify({"error": f"{course_type} subjects are only permitted in Semester 1 or Semester 2."}), 400
+        department = "General"
+        dept_id = None
+    elif course_type == 'VAC':
+        if semester not in (3, 4):
+            return jsonify({"error": "VAC subjects are only permitted in Semester 3 or Semester 4."}), 400
+        department = "General"
+        dept_id = None
+    else:
+        if not is_valid_department(department) or department.lower() in ('general', 'common'):
+            return jsonify({"error": "Please select a valid department for CORE subjects"}), 400
+        dept_id = get_department_id_by_name_or_slug(department)
+        if dept_id is None:
+            return jsonify({"error": "Invalid department"}), 400
 
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute(
-            "UPDATE subjects SET subject_name=%s, semester=%s, department=%s, department_id=%s WHERE subject_id=%s RETURNING subject_id",
-            (name, semester, department, dept_id, subject_id)
+            "UPDATE subjects SET subject_name=%s, semester=%s, department=%s, department_id=%s, course_type=%s WHERE subject_id=%s RETURNING subject_id",
+            (name, semester, department, dept_id, course_type, subject_id)
         )
         if cur.fetchone() is None:
             return jsonify({"error": "Subject not found"}), 404
@@ -1414,6 +1739,7 @@ def admin_update_subject(subject_id):
             "subject_name": name,
             "semester": semester,
             "department": department,
+            "course_type": course_type,
         })
     except Exception:
         conn.rollback()
@@ -1457,7 +1783,9 @@ def admin_get_papers():
         cur.execute("""
             SELECT q.paper_id, s.subject_name, s.semester, q.year,
                    q.exam_type, q.file_url, q.upload_date, q.ai_analysis,
-                   q.public_id, q.file_size
+                   q.public_id, q.file_size,
+                   COALESCE(s.course_type, 'CORE') as course_type,
+                   COALESCE(s.department, 'General') as department
             FROM question_papers q
             LEFT JOIN subjects s ON q.subject_id = s.subject_id
             ORDER BY q.upload_date DESC NULLS LAST
@@ -1466,7 +1794,7 @@ def admin_get_papers():
         results = []
         pending_size_updates = []
         for r in rows:
-            paper_id, subj_name, sem, yr, ex_type, file_url, up_date, ai_an, pub_id, size = r
+            paper_id, subj_name, sem, yr, ex_type, file_url, up_date, ai_an, pub_id, size, course_type, dept_name = r
             if size is None and file_url:
                 try:
                     head_res = requests.head(file_url, timeout=3)
@@ -1488,6 +1816,8 @@ def admin_get_papers():
                 "public_id": pub_id,
                 "file_size": size,
                 "file_size_formatted": format_file_size(size),
+                "course_type": course_type,
+                "department": dept_name,
             })
 
         if pending_size_updates:
@@ -1512,14 +1842,14 @@ def admin_delete_paper(paper_id):
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT public_id FROM question_papers WHERE paper_id=%s",
+            "SELECT public_id, user_id FROM question_papers WHERE paper_id=%s",
             (paper_id,)
         )
         row = cur.fetchone()
         if row is None:
             return jsonify({"error": "Paper not found"}), 404
 
-        public_id = row[0]
+        public_id, paper_user_id = row
 
         if public_id:
             try:
@@ -1529,6 +1859,12 @@ def admin_delete_paper(paper_id):
 
         cur.execute(
             "DELETE FROM question_papers WHERE paper_id=%s", (paper_id,))
+        if paper_user_id:
+            cur.execute("""
+                UPDATE users
+                SET approved_papers_count = GREATEST(0, COALESCE(approved_papers_count, 0) - 1)
+                WHERE user_id = %s
+            """, (paper_user_id,))
         conn.commit()
         clear_departments_cache()
 
@@ -1609,6 +1945,6 @@ def server_error(e):
 if __name__ == "__main__":
     app.run(
         host='0.0.0.0',
-        port=int(os.environ.get('PORT', 8000)),
+        port=config.PORT,
         debug=os.environ.get('FLASK_DEBUG', 'false').lower() in ('true', '1')
     )

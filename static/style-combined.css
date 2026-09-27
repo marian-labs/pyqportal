@@ -4,6 +4,20 @@
    ===================================================================== */
 
 
+/* ==================== HIDE SCROLLBARS GLOBALLY ==================== */
+html, body, *, *::before, *::after {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+}
+
+*::-webkit-scrollbar,
+::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+}
+
 /* =====================================================================
    SECTION 1 — SHARED: Header, Footer, Popup
    (used across all pages — defined once)
