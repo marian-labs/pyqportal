@@ -1500,9 +1500,9 @@
                                 <span id="scanBtnText">Scan Paper Pages via Camera</span>
                             </button>
                             <input type="file" id="cameraInput" accept="image/*"
-                                capture="environment" style="display:none;" />
+                                capture="environment" style="position:fixed; top:-1000px; left:-1000px; opacity:0; width:1px; height:1px; pointer-events:none;" />
                             <input type="file" id="galleryInput" accept="image/*,.jpg,.jpeg,.png,.webp,.heic"
-                                multiple style="display:none;" />
+                                multiple style="position:fixed; top:-1000px; left:-1000px; opacity:0; width:1px; height:1px; pointer-events:none;" />
                         </div>
 
                     </div>
@@ -2286,7 +2286,20 @@
             return true;
         }
 
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
         async function triggerCameraScan() {
+            if (isIOS) {
+                // iOS Safari strictly requires file/camera input.click() to execute synchronously
+                // within the direct user tap gesture. Any preceding async/await (like getUserMedia or setTimeout)
+                // invalidates the browser's user activation token and Safari silently blocks opening the camera.
+                if (cameraInput) {
+                    cameraInput.value = '';
+                    cameraInput.click();
+                }
+                return;
+            }
+
             const hasPermission = await ensureCameraPermission();
             if (!hasPermission) return;
             if (cameraInput) {
