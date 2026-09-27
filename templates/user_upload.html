@@ -1168,6 +1168,118 @@
             display: inline-flex; align-items: center; gap: .3rem;
         }
         .crop-rotate-btn:hover { border-color: #64748b; color: #fff; background: rgba(255,255,255,.1); }
+
+        /* ── STRICT BACKGROUND SCROLL LOCK WHEN MODALS ARE OPEN ── */
+        html.modal-open-scroll-lock,
+        body.modal-open-scroll-lock {
+            overflow: hidden !important;
+            height: 100% !important;
+            max-height: 100vh !important;
+            overscroll-behavior: none !important;
+            touch-action: none !important;
+        }
+
+        /* ── FULLSCREEN SCANNED IMAGE LIGHTBOX / PREVIEW MODAL ── */
+        .scan-preview-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 14, 28, 0.88);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 10005;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1.25rem;
+            overscroll-behavior: contain;
+            touch-action: none;
+            animation: scanModalPop .18s ease-out;
+            box-sizing: border-box;
+        }
+
+        .scan-preview-modal-content {
+            position: relative;
+            max-width: 96vw;
+            max-height: 94vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .scan-preview-top-bar {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.65rem;
+            gap: 1rem;
+        }
+
+        .scan-preview-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #f8fafc;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.3rem 0.85rem;
+            border-radius: 999px;
+            letter-spacing: 0.02em;
+        }
+
+        .scan-preview-close {
+            background: rgba(255, 255, 255, 0.16);
+            border: 1.5px solid rgba(255, 255, 255, 0.28);
+            color: #ffffff;
+            font-size: 1.2rem;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .15s ease;
+        }
+
+        .scan-preview-close:hover {
+            background: rgba(239, 68, 68, 0.85);
+            border-color: #ef4444;
+            transform: scale(1.08);
+        }
+
+        .scan-preview-frame {
+            max-width: 92vw;
+            max-height: 82vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0f172a;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            overflow: hidden;
+        }
+
+        .scan-preview-img {
+            max-width: 90vw;
+            max-height: 80vh;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            display: block;
+            border-radius: 6px;
+        }
+
+        .scan-preview-hint {
+            margin-top: 0.6rem;
+            color: #cbd5e1;
+            font-size: 0.78rem;
+            font-weight: 500;
+            opacity: 0.85;
+        }
     </style>
 </head>
 
@@ -1774,7 +1886,7 @@
                         <span id="addMorePagesText">➕ Add More Pages</span>
                     </button>
                     <button type="button" class="scan-btn-secondary" id="chooseGalleryBtn" title="Choose images from gallery">
-                        <span>📁 Gallery / Files</span>
+                        <span>📁 Gallery</span>
                     </button>
                 </div>
                 <button type="button" class="scan-btn-primary" id="compilePdfBtn">
@@ -1783,6 +1895,20 @@
                         pages)</span>
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Scanned Image Lightbox / Preview Modal -->
+    <div id="scanPreviewModal" class="scan-preview-modal-overlay" style="display:none;" onclick="closeScanPreviewModal()">
+        <div class="scan-preview-modal-content" onclick="event.stopPropagation()">
+            <div class="scan-preview-top-bar">
+                <span class="scan-preview-title" id="scanPreviewTitle">📄 Page 1</span>
+                <button type="button" class="scan-preview-close" onclick="closeScanPreviewModal()" title="Close Preview">✕</button>
+            </div>
+            <div class="scan-preview-frame">
+                <img id="scanPreviewImg" src="" class="scan-preview-img" alt="Scanned Page Preview" />
+            </div>
+            <div class="scan-preview-hint">Tap anywhere outside or ✕ to close</div>
         </div>
     </div>
 
@@ -2255,7 +2381,7 @@
                         return true;
                     }
                     if (res.state === 'denied') {
-                        alert('Camera permission is blocked in your browser settings. Please tap the lock/tune icon near your address bar to allow Camera access, or use the "📁 Gallery / Files" option.');
+                        alert('Camera permission is blocked in your browser settings. Please tap the lock/tune icon near your address bar to allow Camera access, or use the "📁 Gallery" option.');
                         return false;
                     }
                 } catch (e) {
@@ -2277,7 +2403,7 @@
                 } catch (err) {
                     console.warn('Camera permission request error:', err);
                     if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                        alert('Camera permission is required to capture photos directly. Please allow camera access in your browser settings, or use the "📁 Gallery / Files" button.');
+                        alert('Camera permission is required to capture photos directly. Please allow camera access in your browser settings, or use the "📁 Gallery" button.');
                         return false;
                     }
                     return true;
@@ -2410,17 +2536,68 @@
             });
         });
 
+        function lockBackgroundScroll() {
+            document.documentElement.classList.add('modal-open-scroll-lock');
+            document.body.classList.add('modal-open-scroll-lock');
+        }
+
+        function unlockBackgroundScroll() {
+            const isScanOpen = scannerModal && scannerModal.style.display !== 'none';
+            const cropModalEl = document.getElementById('cropModal');
+            const isCropOpen = cropModalEl && cropModalEl.style.display !== 'none';
+            const previewModalEl = document.getElementById('scanPreviewModal');
+            const isPreviewOpen = previewModalEl && previewModalEl.style.display !== 'none';
+            if (!isScanOpen && !isCropOpen && !isPreviewOpen) {
+                document.documentElement.classList.remove('modal-open-scroll-lock');
+                document.body.classList.remove('modal-open-scroll-lock');
+            }
+        }
+
         function openScanModal() {
             if (scannerModal) scannerModal.style.display = 'flex';
+            lockBackgroundScroll();
         }
 
         function closeScanModal() {
             if (scannerModal) scannerModal.style.display = 'none';
+            unlockBackgroundScroll();
         }
 
         if (closeScannerModalBtn) {
             closeScannerModalBtn.addEventListener('click', closeScanModal);
         }
+
+        window.openScanPreviewModal = function(idx) {
+            const dataUrl = scannedImagesArray[idx];
+            if (!dataUrl) return;
+            const previewModal = document.getElementById('scanPreviewModal');
+            const previewImg = document.getElementById('scanPreviewImg');
+            const previewTitle = document.getElementById('scanPreviewTitle');
+            if (!previewModal || !previewImg) return;
+
+            previewImg.src = dataUrl;
+            previewImg.style.filter = getFilterCssString(currentScanFilter);
+            if (previewTitle) {
+                previewTitle.textContent = `📄 Page ${idx + 1} of ${scannedImagesArray.length}`;
+            }
+            previewModal.style.display = 'flex';
+            lockBackgroundScroll();
+        };
+
+        window.closeScanPreviewModal = function() {
+            const previewModal = document.getElementById('scanPreviewModal');
+            if (previewModal) previewModal.style.display = 'none';
+            unlockBackgroundScroll();
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const previewModal = document.getElementById('scanPreviewModal');
+                if (previewModal && previewModal.style.display !== 'none') {
+                    closeScanPreviewModal();
+                }
+            }
+        });
 
         function renderScannedThumbnails() {
             if (!scannedThumbnailsGrid) return;
@@ -2442,10 +2619,10 @@
                 card.className = 'scan-thumb-card';
                 const filterStyle = getFilterCssString(currentScanFilter);
                 card.innerHTML = `
-                    <img src="${imgDataUrl}" class="scan-thumb-img" style="filter:${filterStyle}" alt="Page ${idx + 1}" />
-                    <div class="scan-thumb-badge">Page ${idx + 1}</div>
-                    <button type="button" class="scan-thumb-rotate" title="Rotate Page 90°" onclick="rotateScannedPage(${idx})">🔄</button>
-                    <button type="button" class="scan-thumb-delete" title="Delete Page" onclick="removeScannedPage(${idx})">✕</button>
+                    <img src="${imgDataUrl}" class="scan-thumb-img" style="filter:${filterStyle}; cursor:pointer;" alt="Page ${idx + 1}" title="Tap to view full screen" onclick="openScanPreviewModal(${idx})" />
+                    <div class="scan-thumb-badge" onclick="openScanPreviewModal(${idx})" style="cursor:pointer;" title="Tap to view full screen">Page ${idx + 1}</div>
+                    <button type="button" class="scan-thumb-rotate" title="Rotate Page 90°" onclick="event.stopPropagation(); rotateScannedPage(${idx})">🔄</button>
+                    <button type="button" class="scan-thumb-delete" title="Delete Page" onclick="event.stopPropagation(); removeScannedPage(${idx})">✕</button>
                 `;
                 scannedThumbnailsGrid.appendChild(card);
             });
@@ -2673,6 +2850,7 @@
             cropRotation = 0;          // reset immediately — before any async gap
             cropRotCanvas = null;      // clear stale canvas so resize events are a no-op
             cropModal.style.display = 'flex';
+            if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll();
 
             // Wipe both canvases and hide handles immediately (synchronous) so the old
             // image and handles never flash while the new file is being read asynchronously

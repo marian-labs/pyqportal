@@ -2477,7 +2477,8 @@ function renderUsers(users) {
 function formatIST(dateStr, includeTime = true) {
     if (!dateStr) return '—';
     let s = String(dateStr).trim();
-    if (!s.includes('Z') && !s.includes('+') && !s.includes('-0') && !s.includes('-1')) {
+    // If no timezone offset (Z, +HH:MM, -HH:MM) is present at the end of the string, treat as UTC and append 'Z'
+    if (!/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(s)) {
         if (!s.includes('T')) s = s.replace(' ', 'T');
         s = s + 'Z';
     }

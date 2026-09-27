@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 from functools import wraps
 import uuid
 import requests
-from datetime import timedelta
+from datetime import timedelta, timezone
 from google import genai
 from google.genai import types
 from flask_limiter import Limiter
@@ -23,6 +23,16 @@ from urllib.parse import urlparse, urljoin
 
 PDF_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", "papers")
 os.makedirs(PDF_CACHE_DIR, exist_ok=True)
+
+def to_utc_iso(dt):
+    """Formats a datetime as an unambiguous UTC ISO-8601 string with 'Z' suffix for client-side IST conversion."""
+    if not dt:
+        return None
+    if getattr(dt, "tzinfo", None) is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
 import config
 from models import (
@@ -929,7 +939,7 @@ def admin_get_pending():
                 "file_name": r[5],
                 "staging_path": staging_path,
                 "submitted_by_ip": r[7],
-                "submitted_at": r[8].isoformat() if r[8] else None,
+                "submitted_at": to_utc_iso(r[8]),
                 "status": r[9],
                 "file_size": file_size_bytes,
                 "formatted_file_size": format_file_size(file_size_bytes),
@@ -1479,7 +1489,7 @@ def admin_get_users():
                 "email": r[2],
                 "name": r[3] or r[1] or (r[2].split("@")[0] if r[2] else "User"),
                 "role": r[4] or "user",
-                "last_login": r[5].isoformat() if r[5] else None,
+                "last_login": to_utc_iso(r[5]),
                 "approved_papers_count": r[6] or 0,
             }
             for r in rows
@@ -1811,7 +1821,7 @@ def admin_get_papers():
                 "year": yr,
                 "exam_type": ex_type,
                 "file_url": f"/paper/{paper_id}/view",
-                "upload_date": up_date.isoformat() if up_date else None,
+                "upload_date": to_utc_iso(up_date),
                 "ai_analysis": ai_an,
                 "public_id": pub_id,
                 "file_size": size,
