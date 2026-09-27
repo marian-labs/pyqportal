@@ -280,12 +280,20 @@ if (document.getElementById('semFolders')) {
         }
         papersGrid.style.display = 'grid';
         noResults.style.display  = 'none';
-        papersGrid.innerHTML = list.map(paper => `
+        papersGrid.innerHTML = list.map(paper => {
+            const cType = (paper.course_type || 'CORE').toUpperCase();
+            const badgeHtml = cType !== 'CORE'
+                ? `<span class="course-type-badge badge-${cType.toLowerCase()}">${escapeHtml(cType)}</span>`
+                : '';
+            return `
             <div class="paper-card">
                 <div class="paper-info">
                     <div class="info-item">
                         <span class="info-label">Subject</span>
-                        <span class="info-value">${escapeHtml(paper.subject)}</span>
+                        <span class="info-value" style="display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                            <span>${escapeHtml(paper.subject)}</span>
+                            ${badgeHtml}
+                        </span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">Year</span>
@@ -324,7 +332,8 @@ if (document.getElementById('semFolders')) {
                     </button>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
     let analyseController = null;
@@ -569,66 +578,137 @@ if (document.getElementById('uploadForm')) {
     const fileSize       = document.getElementById('fileSize');
     const removeFile     = document.getElementById('removeFile');
 
-    // ── Department → Subject filter ──
-    // Only runs on admin /upload page (uploadDepartment).
-    // The /user-upload page has its own dept+semester dual filter inline.
+    // ── Department + Semester → Subject filter (on /upload page) ──
     (function () {
-        const deptSelect    = document.getElementById('uploadDepartment');
-        const subjectSelect = document.getElementById('uploadSubject');
-        if (!deptSelect || !subjectSelect) return;
+        const deptSelect     = document.getElementById('uploadDepartment');
+        const courseTypeGroup = document.getElementById('uploadCourseTypeGroup');
+        const courseTypeSelect = document.getElementById('uploadCourseType');
+        const semesterSelect = document.getElementById('uploadSemester');
+        const subjectSelect  = document.getElementById('uploadSubject');
+        if (!deptSelect || !semesterSelect || !subjectSelect) return;
 
         const allSubjectOptions = Array.from(subjectSelect.querySelectorAll('option')).filter(o => o.value);
 
-        function filterSubjectsByDept(deptName) {
-            subjectSelect.innerHTML = '<option value="">' +
-                (deptName ? '— Select a subject —' : '— Select department first —') +
-                '</option>';
-            if (!deptName) return;
-            let found = 0;
-            allSubjectOptions.forEach(opt => {
-                if (opt.dataset.department === deptName) {
-                    subjectSelect.appendChild(opt.cloneNode(true));
-                    found++;
+        function updateSemesterDropdown() {
+            const isGeneral = deptSelect.value === 'General';
+            if (isGeneral) {
+                if (courseTypeGroup) courseTypeGroup.style.display = 'block';
+                if (courseTypeSelect) courseTypeSelect.required = true;
+                const cType = courseTypeSelect ? courseTypeSelect.value : '';
+                if (!cType) {
+                    semesterSelect.innerHTML = '<option value="">Select Course Type first</option>';
+                    semesterSelect.disabled = true;
+                    return;
                 }
-            });
-            if (found === 0) {
-                const empty = document.createElement('option');
-                empty.disabled = true;
-                empty.textContent = 'No subjects for this department';
-                subjectSelect.appendChild(empty);
+                semesterSelect.disabled = false;
+                semesterSelect.innerHTML = '<option value="">Select Semester</option>';
+                const allowedSems = (cType === 'AEC' || cType === 'MDC') ? [1, 2] : (cType === 'VAC' ? [3, 4] : [1, 2]);
+                allowedSems.forEach(i => {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.textContent = `Semester ${i}`;
+                    semesterSelect.appendChild(opt);
+                });
+            } else {
+                if (courseTypeGroup) courseTypeGroup.style.display = 'none';
+                if (courseTypeSelect) {
+                    courseTypeSelect.required = false;
+                    courseTypeSelect.value = '';
+                }
+                semesterSelect.disabled = false;
+                const selectedOpt = deptSelect.options[deptSelect.selectedIndex];
+                const stream = selectedOpt ? (selectedOpt.getAttribute('data-stream') || 'FYUGP') : 'FYUGP';
+                const maxSem = stream === '5year' ? 10 : 8;
+                semesterSelect.innerHTML = '<option value="">Select Semester</option>';
+                for (let i = 1; i <= maxSem; i++) {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.textContent = `Semester ${i}`;
+                    semesterSelect.appendChild(opt);
+                }
             }
         }
 
-        deptSelect.addEventListener('change', function () {
-            filterSubjectsByDept(this.value);
-            subjectSelect.value = '';
-            const semSelect = document.getElementById('uploadSemester');
-            if (semSelect) semSelect.value = '';
-        });
+        function filterSubjects() {
+            const deptName = deptSelect.value;
+            const isGeneral = deptName === 'General';
+            const cType = courseTypeSelect ? courseTypeSelect.value : '';
+            const semValue = semesterSelect.value;
 
-        // Restore filtered list on error re-render (dept already selected via POST)
-        if (deptSelect.value) filterSubjectsByDept(deptSelect.value);
-    })();
-
-    // ── Subject → Semester auto-fill (admin /upload only) ──
-    (function () {
-        const subjectSelect  = document.getElementById('uploadSubject');
-        const semesterSelect = document.getElementById('uploadSemester');
-        if (!subjectSelect || !semesterSelect) return;
-
-        subjectSelect.addEventListener('change', function () {
-            const selected = this.options[this.selectedIndex];
-            const sem = selected ? selected.dataset.semester : '';
-            if (sem) {
-                semesterSelect.value = sem;
-                semesterSelect.style.transition = 'background .3s ease';
-                semesterSelect.style.background = 'rgba(59,130,246,0.08)';
-                setTimeout(() => { semesterSelect.style.background = '#f3f4f6'; }, 600);
-            } else {
-                semesterSelect.value = '';
+            if (!deptName) {
+                subjectSelect.disabled = true;
+                subjectSelect.innerHTML = '<option value="">— Select Department first —</option>';
+                subjectSelect.value = '';
+                return;
             }
+
+            if (isGeneral && !cType) {
+                subjectSelect.disabled = true;
+                subjectSelect.innerHTML = '<option value="">— Select Course Type first —</option>';
+                subjectSelect.value = '';
+                return;
+            }
+
+            if (!semValue) {
+                subjectSelect.disabled = true;
+                subjectSelect.innerHTML = '<option value="">— Select Semester first —</option>';
+                subjectSelect.value = '';
+                return;
+            }
+
+            subjectSelect.disabled = false;
+            subjectSelect.innerHTML = '<option value="">— Select Subject —</option>';
+            let found = 0;
+            allSubjectOptions.forEach(opt => {
+                const optDept = opt.dataset.department || '';
+                const optSem  = opt.dataset.semester || '';
+                const optCType = (opt.dataset.courseType || 'CORE').toUpperCase();
+
+                if (isGeneral) {
+                    if (optDept === 'General' && optCType === cType && String(optSem) === String(semValue)) {
+                        subjectSelect.appendChild(opt.cloneNode(true));
+                        found++;
+                    }
+                } else {
+                    if (optDept === deptName && String(optSem) === String(semValue) && optCType === 'CORE') {
+                        subjectSelect.appendChild(opt.cloneNode(true));
+                        found++;
+                    }
+                }
+            });
+
+            if (found === 0) {
+                subjectSelect.disabled = true;
+                const empty = document.createElement('option');
+                empty.disabled = true;
+                empty.textContent = 'No subjects for Sem ' + semValue + (isGeneral ? ` (${cType})` : '');
+                subjectSelect.appendChild(empty);
+            }
+            subjectSelect.value = '';
+        }
+
+        deptSelect.addEventListener('change', function () {
+            updateSemesterDropdown();
+            semesterSelect.value = '';
+            filterSubjects();
         });
+
+        if (courseTypeSelect) {
+            courseTypeSelect.addEventListener('change', function () {
+                updateSemesterDropdown();
+                semesterSelect.value = '';
+                filterSubjects();
+            });
+        }
+
+        semesterSelect.addEventListener('change', function () {
+            filterSubjects();
+        });
+
+        filterSubjects();
     })();
+
+
 
     if (fileUploadArea) {
         fileUploadArea.addEventListener('click', () => uploadFile.click());

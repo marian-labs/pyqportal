@@ -3,6 +3,16 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+}
+
+*::-webkit-scrollbar,
+::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
 }
 
 :root {
@@ -1696,4 +1706,38 @@ textarea.form-control {
     .search-hero-input {
         font-size: 0.92rem;
     }
+}
+
+/* ── Course Type Badges (Option A) ── */
+.course-type-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.12rem 0.5rem;
+    border-radius: 9999px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
+    vertical-align: middle;
+}
+.course-type-badge.badge-core {
+    background: #F3F4F6;
+    color: #4B5563;
+    border: 1px solid #E5E7EB;
+}
+.course-type-badge.badge-aec {
+    background: #EFF6FF;
+    color: #1D4ED8;
+    border: 1px solid #BFDBFE;
+}
+.course-type-badge.badge-mdc {
+    background: #FAF5FF;
+    color: #7E22CE;
+    border: 1px solid #E9D5FF;
+}
+.course-type-badge.badge-vac {
+    background: #ECFDF5;
+    color: #047857;
+    border: 1px solid #A7F3D0;
 }

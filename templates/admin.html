@@ -46,6 +46,19 @@
             --radius-xl: 1rem;
         }
 
+        html, body, *, *::before, *::after {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
+
+        *::-webkit-scrollbar,
+        ::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            background: transparent !important;
+        }
+
         body {
             font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg-secondary);
@@ -484,9 +497,74 @@
         }
 
         .form-control::placeholder { color: var(--gray-400); }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-
         .form-error { font-size: .8125rem; color: var(--accent-red); display: none; }
+
+        /* ===== TOOLBAR & FILTER INPUTS ===== */
+        .table-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            flex-wrap: nowrap;
+        }
+
+        .table-toolbar .filter-input {
+            height: 38px;
+            padding: 0 0.75rem 0 2.25rem;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            background: white;
+            box-sizing: border-box;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+            min-width: 220px;
+        }
+
+        .table-toolbar .filter-input:focus {
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+        }
+
+        .table-toolbar .filter-select {
+            height: 38px;
+            line-height: 36px;
+            padding: 0 2rem 0 0.75rem;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 0.75rem center;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            box-sizing: border-box;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .table-toolbar .filter-select:focus {
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+        }
+
+        @media (max-width: 768px) {
+            .card-header-responsive {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 0.875rem !important;
+            }
+            .table-toolbar {
+                flex-wrap: wrap;
+                width: 100%;
+            }
+            .table-toolbar .filter-input,
+            .table-toolbar .filter-select {
+                flex: 1;
+                min-width: 140px;
+            }
+        }
 
         /* ===== MODAL ===== */
         .modal-overlay {
@@ -596,11 +674,15 @@
 
         .toast.success { border-left-color: var(--accent-green); }
         .toast.error   { border-left-color: var(--accent-red); }
+        .toast.info    { border-left-color: var(--primary-blue); }
         .toast-icon { flex-shrink: 0; }
         .toast-icon svg { width: 18px; height: 18px; stroke-width: 2.5; }
         .toast.success .toast-icon { color: var(--accent-green); }
         .toast.error   .toast-icon { color: var(--accent-red); }
+        .toast.info .toast-icon    { color: var(--primary-blue); }
         .toast-msg { font-weight: 500; color: var(--text-primary); }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
 
         /* ===== EMPTY STATE ===== */
         .empty-state { text-align: center; padding: 3.5rem 2rem; color: var(--text-secondary); }
@@ -717,6 +799,11 @@
                 <span class="nav-link-label">Pending Reviews</span>
                 <span class="nav-badge" id="pendingNavBadge">0</span>
             </a>
+            <a class="nav-link" href="#users" data-section="users" id="navUsers">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span class="nav-link-label">Users</span>
+                <span class="nav-badge" id="usersNavBadge">0</span>
+            </a>
 
         </nav>
 
@@ -786,12 +873,12 @@
                         <div class="stat-value" id="stat-ai">—</div>
                         <div class="stat-label">AI Analysed</div>
                     </div>
-                    <div class="stat-card orange">
+                    <div class="stat-card orange" style="cursor:pointer" onclick="navigateTo('users')">
                         <div class="stat-icon orange">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                         </div>
-                        <div class="stat-value" id="stat-recent">—</div>
-                        <div class="stat-label">Uploads (30d)</div>
+                        <div class="stat-value" id="stat-users">—</div>
+                        <div class="stat-label">Total Users</div>
                     </div>
                     <div class="stat-card cyan" style="cursor:pointer" onclick="navigateTo('pending')">
                         <div class="stat-icon cyan">
@@ -887,11 +974,23 @@
 
                     <!-- ── Filter Bar ── -->
                     <div style="padding:.85rem 1.25rem; border-bottom:1px solid var(--border-color); display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; background:var(--bg-secondary,#f9fafb);">
+                        <!-- Course Type filter -->
+                        <div style="display:flex;flex-direction:column;gap:.25rem;">
+                            <label style="font-size:.7rem;font-weight:700;color:var(--text-secondary);letter-spacing:.06em;text-transform:uppercase;">Course Type</label>
+                            <select id="filterSubjectCourseType" class="form-control" style="min-width:120px;font-size:.85rem;padding:.35rem .7rem;" onchange="applySubjectFilters()">
+                                <option value="">All Types</option>
+                                <option value="CORE">CORE</option>
+                                <option value="AEC">AEC</option>
+                                <option value="MDC">MDC</option>
+                                <option value="VAC">VAC</option>
+                            </select>
+                        </div>
                         <!-- Dept filter -->
                         <div style="display:flex;flex-direction:column;gap:.25rem;">
                             <label style="font-size:.7rem;font-weight:700;color:var(--text-secondary);letter-spacing:.06em;text-transform:uppercase;">Department</label>
                             <select id="filterSubjectDept" class="form-control" style="min-width:140px;font-size:.85rem;padding:.35rem .7rem;" onchange="applySubjectFilters()">
                                 <option value="">All Departments</option>
+                                <option value="General">General / Common</option>
                                 {% for slug, name in departments.items() %}
                                 <option value="{{ name }}">{{ name }}</option>
                                 {% endfor %}
@@ -935,6 +1034,7 @@
                                     <tr>
                                         <th>#</th>
                                         <th>Subject Name</th>
+                                        <th>Type</th>
                                         <th>Department</th>
                                         <th>Semester</th>
                                         <th>Papers</th>
@@ -942,7 +1042,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="subjectsTableBody">
-                                    <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>
+                                    <tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1022,6 +1122,57 @@
                 </div>
             </div>
 
+            <!-- ======= USERS ======= -->
+            <div id="section-users" class="section">
+                <div class="card">
+                    <div class="card-header card-header-responsive">
+                        <div style="display:flex;align-items:center;gap:.75rem;">
+                            <span class="card-title">Registered Users</span>
+                            <span class="badge badge-blue" id="usersCountBadge" style="display:none">0 users</span>
+                        </div>
+                        <div class="table-toolbar">
+                            <div style="position:relative;">
+                                <input type="text" id="usersSearchInput" placeholder="Search name or email…" 
+                                    class="filter-input" 
+                                    oninput="filterUsersList()">
+                                <svg style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-secondary);pointer-events:none;" 
+                                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                </svg>
+                            </div>
+                            <select id="usersRoleFilter" class="filter-select" onchange="filterUsersList()">
+                                <option value="">All Roles</option>
+                                <option value="admin">Admins</option>
+                                <option value="user">Students</option>
+                            </select>
+                            <button class="btn btn-ghost btn-sm" style="height:38px;" onclick="loadUsers()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="23,4 23,11 16,11"/><polyline points="1,20 1,13 8,13"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 11M1 13l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Approved Papers</th>
+                                        <th>Last Login</th>
+                                        <th>User ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTableBody">
+                                    <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div><!-- /content-area -->
     </div><!-- /main-content -->
 </div><!-- /admin-layout -->
@@ -1093,19 +1244,29 @@
         <div class="modal-body">
             <div id="addSubjectAlert"></div>
 
-            <!-- Shared Department + Semester (applied to ALL subjects below) -->
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.25rem;">
+            <!-- Shared Department + Course Type + Semester -->
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.75rem; margin-bottom:1.25rem;">
                 <div class="form-group" style="margin:0;">
                     <label class="form-label">Department <span style="color:var(--accent-red)">*</span></label>
-                    <select class="form-control" id="bulkSubjectDept" required>
+                    <select class="form-control" id="bulkSubjectDept" onchange="onBulkDeptChange()" required>
+                        <option value="General">General / Common</option>
                         {% for slug, name in departments.items() %}
                         <option value="{{ name }}"{% if slug == 'bca' %} selected{% endif %}>{{ name }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="form-group" style="margin:0;">
-                    <label class="form-label">Semester</label>
-                    <select class="form-control" id="bulkSubjectSem">
+                    <label class="form-label">Course Type <span style="color:var(--accent-red)">*</span></label>
+                    <select class="form-control" id="bulkSubjectCourseType" onchange="onBulkCourseTypeChange()" required>
+                        <option value="CORE" selected>CORE</option>
+                        <option value="AEC">AEC (Sem 1 &amp; 2)</option>
+                        <option value="MDC">MDC (Sem 1 &amp; 2)</option>
+                        <option value="VAC">VAC (Sem 3 &amp; 4)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">Semester <span style="color:var(--accent-red)">*</span></label>
+                    <select class="form-control" id="bulkSubjectSem" required>
                         <option value="">— Select semester —</option>
                         {% for i in range(1, 9) %}
                         <option value="{{ i }}">Semester {{ i }}</option>
@@ -1168,17 +1329,27 @@
                     <input type="text" class="form-control" name="subject_name" id="editSubjectName" required>
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Course Type <span style="color:var(--accent-red)">*</span></label>
+                    <select class="form-control" name="course_type" id="editSubjectCourseType" onchange="onEditCourseTypeChange()" required>
+                        <option value="CORE">CORE (Department-specific)</option>
+                        <option value="AEC">AEC (All FYUGP — Sem 1 &amp; 2)</option>
+                        <option value="MDC">MDC (All FYUGP except BCA/BBA — Sem 1 &amp; 2)</option>
+                        <option value="VAC">VAC (All FYUGP except BCA/BBA — Sem 3 &amp; 4)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="editSubjectDeptGroup">
                     <label class="form-label">Department <span style="color:var(--accent-red)">*</span></label>
                     <select class="form-control" name="department" id="editSubjectDepartment" required>
+                        <option value="General">General / Common</option>
                         {% for slug, name in departments.items() %}
                         <option value="{{ name }}">{{ name }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Semester</label>
-                    <select class="form-control" name="semester" id="editSubjectSemester">
-                        <option value="">— No semester —</option>
+                    <label class="form-label">Semester <span style="color:var(--accent-red)">*</span></label>
+                    <select class="form-control" name="semester" id="editSubjectSemester" required>
+                        <option value="">— Select semester —</option>
                         {% for i in range(1, 9) %}
                         <option value="{{ i }}">Semester {{ i }}</option>
                         {% endfor %}
@@ -1214,14 +1385,33 @@
 
 <!-- ========== APPROVE CONFIRM MODAL ========== -->
 <div class="modal-overlay" id="modalConfirmApprove">
-    <div class="modal" style="max-width:400px;">
-        <div class="modal-body" style="padding:2rem 1.5rem 1rem;">
+    <div class="modal" style="max-width:440px;">
+        <div class="modal-body" style="padding:1.75rem 1.5rem 1rem;">
             <div class="confirm-icon green-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12"/></svg>
             </div>
             <div class="confirm-text">
                 <h3>Approve Submission</h3>
                 <p id="approveModalBody">Approve this paper? It will be moved to the main bucket and published immediately.</p>
+                <div style="margin-top:1.25rem; text-align:left;">
+                    <label class="form-label" style="font-size:0.825rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.4rem; display:block;">
+                        Confirm Exam Type
+                    </label>
+                    <select id="approveExamType" class="form-control" style="width:100%; font-size:0.875rem;">
+                        <option value="">— Select exam type —</option>
+                        <optgroup label="Integrated / 5-Year / PG">
+                            <option value="CA-1">CA-1</option>
+                            <option value="CA-2">CA-2</option>
+                            <option value="CA-3">CA-3</option>
+                            <option value="SEM-Final">SEM-Final</option>
+                        </optgroup>
+                        <optgroup label="FYUGP / UG">
+                            <option value="SEA I">SEA I</option>
+                            <option value="SEA II">SEA II</option>
+                            <option value="ISA">ISA</option>
+                        </optgroup>
+                    </select>
+                </div>
             </div>
         </div>
         <div class="modal-footer">
@@ -1242,9 +1432,10 @@ const pageTitles = {
     subjects:    ['Subjects',          'Manage academic subjects'],
     papers:      ['Question Papers',   'View and manage uploaded papers'],
     pending:     ['Pending Reviews',   'Approve or reject user-submitted papers'],
+    users:       ['Registered Users',  'View all registered users and account activity'],
 };
 
-const VALID_SECTIONS = new Set(['dashboard', 'departments', 'subjects', 'papers', 'pending']);
+const VALID_SECTIONS = new Set(['dashboard', 'departments', 'subjects', 'papers', 'pending', 'users']);
 
 function showSection(name, pushState = false) {
     if (!VALID_SECTIONS.has(name)) name = 'dashboard';
@@ -1274,6 +1465,7 @@ function showSection(name, pushState = false) {
     if (name === 'subjects')    loadSubjects();
     if (name === 'papers')      loadPapers();
     if (name === 'pending')     loadPending();
+    if (name === 'users')       loadUsers();
 }
 
 function navigateTo(name) {
@@ -1466,15 +1658,18 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 });
 
 // ===== TOAST =====
-function toast(msg, type = 'success') {
+function toast(msg, type = 'success', duration = 3800) {
     const el = document.createElement('div');
     el.className = 'toast ' + type;
-    const icon = type === 'success'
-        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12"/></svg>'
-        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+    let icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12"/></svg>';
+    if (type === 'error') {
+        icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+    } else if (type === 'info') {
+        icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>';
+    }
     el.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-msg">${escHtml(msg)}</span>`;
     document.getElementById('toast-container').appendChild(el);
-    setTimeout(() => el.remove(), 3800);
+    setTimeout(() => el.remove(), duration);
 }
 
 // ===== STATS =====
@@ -1488,7 +1683,8 @@ async function loadStats() {
         document.getElementById('stat-subjects').textContent = d.total_subjects ?? 0;
         document.getElementById('stat-papers').textContent   = d.total_papers   ?? 0;
         document.getElementById('stat-ai').textContent       = d.papers_with_ai ?? 0;
-        document.getElementById('stat-recent').textContent   = d.recent_uploads ?? 0;
+        document.getElementById('stat-users').textContent    = d.total_users    ?? 0;
+        updateUsersBadge(d.total_users ?? 0);
 
         if (pendingRes.ok) {
             const pending = await pendingRes.json();
@@ -1514,18 +1710,36 @@ function updatePendingBadge(count) {
     }
 }
 
+function updateUsersBadge(count) {
+    const badge = document.getElementById('usersNavBadge');
+    const cardBadge = document.getElementById('usersCountBadge');
+    if (badge) {
+        badge.textContent = count;
+        if (count > 0) badge.classList.add('visible');
+        else badge.classList.remove('visible');
+    }
+    if (cardBadge) {
+        if (count > 0) {
+            cardBadge.textContent = count + ' registered';
+            cardBadge.style.display = '';
+        } else {
+            cardBadge.style.display = 'none';
+        }
+    }
+}
+
 // ===== SUBJECTS =====
 let _allSubjects = [];   // cached full list
 
 async function loadSubjects() {
     const tbody = document.getElementById('subjectsTableBody');
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>';
     try {
         const r = await fetch('/admin/api/subjects');
         _allSubjects = await r.json();
         applySubjectFilters();   // render with current filter state
     } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--accent-red);padding:2rem">Failed to load subjects.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--accent-red);padding:2rem">Failed to load subjects.</td></tr>';
     }
 }
 
@@ -1540,10 +1754,11 @@ function renderSubjectsTable(subjects) {
     }
 
     if (!subjects.length) {
-        const hasFilter = document.getElementById('filterSubjectDept').value ||
+        const hasFilter = document.getElementById('filterSubjectCourseType').value ||
+                          document.getElementById('filterSubjectDept').value ||
                           document.getElementById('filterSubjectSem').value  ||
                           document.getElementById('filterSubjectName').value.trim();
-        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <h3>${hasFilter ? 'No subjects match your filters' : 'No subjects yet'}</h3>
             <p>${hasFilter ? 'Try clearing the filters.' : 'Click "Add Subject" to get started.'}</p>
@@ -1551,16 +1766,28 @@ function renderSubjectsTable(subjects) {
         return;
     }
 
-    tbody.innerHTML = subjects.map(s => `
+    tbody.innerHTML = subjects.map(s => {
+        const ct = (s.course_type || 'CORE').toUpperCase();
+        let ctBadge = '<span class="badge badge-gray">CORE</span>';
+        if (ct === 'AEC') ctBadge = '<span class="badge" style="background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;">AEC</span>';
+        else if (ct === 'MDC') ctBadge = '<span class="badge" style="background:#FAF5FF;color:#7E22CE;border:1px solid #E9D5FF;">MDC</span>';
+        else if (ct === 'VAC') ctBadge = '<span class="badge" style="background:#ECFDF5;color:#047857;border:1px solid #A7F3D0;">VAC</span>';
+
+        const deptDisplay = s.department === 'General'
+            ? '<span class="badge" style="background:#F3F4F6;color:#4B5563;">General / Common</span>'
+            : (s.department ? `<span class="badge badge-green">${escHtml(s.department)}</span>` : '<span class="badge badge-gray">—</span>');
+
+        return `
         <tr>
             <td style="color:var(--text-secondary)">${s.subject_id}</td>
             <td style="font-weight:600">${escHtml(s.subject_name)}</td>
-            <td>${s.department ? `<span class="badge badge-green">${escHtml(s.department)}</span>` : '<span class="badge badge-gray">—</span>'}</td>
+            <td>${ctBadge}</td>
+            <td>${deptDisplay}</td>
             <td>${s.semester ? `<span class="badge badge-blue">Sem ${s.semester}</span>` : '<span class="badge badge-gray">—</span>'}</td>
             <td><span class="badge badge-purple">${s.paper_count ?? 0} papers</span></td>
             <td>
                 <div class="td-actions">
-                    <button class="btn-icon edit" title="Edit" onclick="openEditSubjectModal(${s.subject_id},'${escAttr(s.subject_name)}',${s.semester || 'null'},'${escAttr(s.department || 'BCA')}')">
+                    <button class="btn-icon edit" title="Edit" onclick="openEditSubjectModal(${s.subject_id},'${escAttr(s.subject_name)}',${s.semester || 'null'},'${escAttr(s.department || 'BCA')}','${escAttr(ct)}')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
                     <button class="btn-icon delete" title="Delete" onclick="openDeleteSubjectModal(${s.subject_id},'${escAttr(s.subject_name)}')">
@@ -1568,19 +1795,22 @@ function renderSubjectsTable(subjects) {
                     </button>
                 </div>
             </td>
-        </tr>`).join('');
+        </tr>`;
+    }).join('');
 }
 
 function applySubjectFilters() {
+    const ctFilter = document.getElementById('filterSubjectCourseType') ? document.getElementById('filterSubjectCourseType').value : '';
     const dept    = document.getElementById('filterSubjectDept').value;
     const sem     = document.getElementById('filterSubjectSem').value;
     const nameQ   = document.getElementById('filterSubjectName').value.trim().toLowerCase();
     const clearBtn = document.getElementById('clearSubjectFiltersBtn');
 
-    const isFiltered = dept || sem || nameQ;
+    const isFiltered = ctFilter || dept || sem || nameQ;
     if (clearBtn) clearBtn.style.display = isFiltered ? '' : 'none';
 
     const filtered = _allSubjects.filter(s => {
+        if (ctFilter && (s.course_type || 'CORE').toUpperCase() !== ctFilter) return false;
         if (dept && s.department !== dept) return false;
         if (sem  && String(s.semester || '') !== sem) return false;
         if (nameQ && !s.subject_name.toLowerCase().includes(nameQ)) return false;
@@ -1591,6 +1821,7 @@ function applySubjectFilters() {
 }
 
 function clearSubjectFilters() {
+    if (document.getElementById('filterSubjectCourseType')) document.getElementById('filterSubjectCourseType').value = '';
     document.getElementById('filterSubjectDept').value = '';
     document.getElementById('filterSubjectSem').value  = '';
     document.getElementById('filterSubjectName').value = '';
@@ -1601,17 +1832,54 @@ function clearSubjectFilters() {
 /* ── Bulk Add Subjects ── */
 let bulkRowCount = 0;
 
+function onBulkCourseTypeChange() {
+    const ct = document.getElementById('bulkSubjectCourseType').value;
+    const deptSel = document.getElementById('bulkSubjectDept');
+    const semSel = document.getElementById('bulkSubjectSem');
+
+    if (ct === 'AEC' || ct === 'MDC' || ct === 'VAC') {
+        deptSel.value = 'General';
+    } else if (deptSel.value === 'General') {
+        deptSel.value = 'BCA';
+    }
+
+    const curSem = semSel.value;
+    semSel.innerHTML = '<option value="">— Select semester —</option>';
+    let allowedSems = [1, 2, 3, 4, 5, 6, 7, 8];
+    if (ct === 'AEC' || ct === 'MDC') allowedSems = [1, 2];
+    else if (ct === 'VAC') allowedSems = [3, 4];
+
+    allowedSems.forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `Semester ${i}`;
+        if (String(curSem) === String(i)) opt.selected = true;
+        semSel.appendChild(opt);
+    });
+}
+
+function onBulkDeptChange() {
+    const dept = document.getElementById('bulkSubjectDept').value;
+    const ctSel = document.getElementById('bulkSubjectCourseType');
+    if (dept === 'General') {
+        if (ctSel.value === 'CORE') ctSel.value = 'AEC';
+    } else {
+        ctSel.value = 'CORE';
+    }
+    onBulkCourseTypeChange();
+}
+
 function openAddSubjectModal() {
-    // Reset
     document.getElementById('bulkSubjectRows').innerHTML = '';
     document.getElementById('addSubjectAlert').innerHTML = '';
     document.getElementById('addSubjectSubmitBtn').disabled = false;
     document.getElementById('addSubjectSubmitBtn').textContent = 'Save All Subjects';
+    document.getElementById('bulkSubjectDept').value = 'BCA';
+    document.getElementById('bulkSubjectCourseType').value = 'CORE';
+    onBulkCourseTypeChange();
     bulkRowCount = 0;
-    // Start with 3 empty rows
     addBulkRow(); addBulkRow(); addBulkRow();
     openModal('modalAddSubject');
-    // Focus first input
     setTimeout(() => {
         const first = document.querySelector('#bulkSubjectRows .bulk-row-input');
         if (first) first.focus();
@@ -1644,7 +1912,6 @@ function addBulkRow(prefill = '') {
             </svg>
         </button>`;
     document.getElementById('bulkSubjectRows').appendChild(row);
-    // Renumber all rows
     renumberBulkRows();
     return row.querySelector('input');
 }
@@ -1663,13 +1930,11 @@ function renumberBulkRows() {
 }
 
 function handleBulkRowKey(e, currentId) {
-    // Enter → add new row and focus it
     if (e.key === 'Enter') {
         e.preventDefault();
         const inp = addBulkRow();
         inp.focus();
     }
-    // Backspace on empty → remove row, go up
     if (e.key === 'Backspace' && e.target.value === '') {
         e.preventDefault();
         const rows = Array.from(document.querySelectorAll('#bulkSubjectRows > div'));
@@ -1691,12 +1956,18 @@ async function submitBulkSubjects() {
     alertEl.innerHTML = '';
 
     const department = document.getElementById('bulkSubjectDept').value;
+    const course_type = document.getElementById('bulkSubjectCourseType').value;
     const semester   = document.getElementById('bulkSubjectSem').value || null;
     const names = Array.from(document.querySelectorAll('#bulkSubjectRows .bulk-row-input'))
                        .map(i => i.value.trim()).filter(Boolean);
 
     if (!names.length) {
         alertEl.innerHTML = alertHtml('error', 'Enter at least one subject name.');
+        return;
+    }
+
+    if (!semester) {
+        alertEl.innerHTML = alertHtml('error', 'Please select a semester.');
         return;
     }
 
@@ -1707,7 +1978,7 @@ async function submitBulkSubjects() {
         const r = await fetch('/admin/api/subjects/bulk', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-            body: JSON.stringify({ subject_names: names, department, semester })
+            body: JSON.stringify({ subject_names: names, department, semester, course_type })
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || 'Failed');
@@ -1721,7 +1992,6 @@ async function submitBulkSubjects() {
             closeModal('modalAddSubject');
             loadSubjects();
         } else {
-            // Show summary — keep modal open so admin can fix failures
             let html = `<div style="margin-bottom:0.5rem;">
                 <strong style="color:#059669;">✅ ${ok.length} saved</strong>
                 ${fail.length ? `&nbsp;·&nbsp;<strong style="color:#EF4444;">❌ ${fail.length} failed</strong>` : ''}
@@ -1740,11 +2010,41 @@ async function submitBulkSubjects() {
 }
 
 
-function openEditSubjectModal(id, name, semester, department) {
+function onEditCourseTypeChange() {
+    const ct = document.getElementById('editSubjectCourseType').value;
+    const deptSel = document.getElementById('editSubjectDepartment');
+    const semSel = document.getElementById('editSubjectSemester');
+
+    if (ct === 'AEC' || ct === 'MDC' || ct === 'VAC') {
+        deptSel.value = 'General';
+        deptSel.disabled = true;
+    } else {
+        deptSel.disabled = false;
+        if (deptSel.value === 'General') deptSel.value = 'BCA';
+    }
+
+    const curSem = semSel.value;
+    semSel.innerHTML = '<option value="">— Select semester —</option>';
+    let allowedSems = [1, 2, 3, 4, 5, 6, 7, 8];
+    if (ct === 'AEC' || ct === 'MDC') allowedSems = [1, 2];
+    else if (ct === 'VAC') allowedSems = [3, 4];
+
+    allowedSems.forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `Semester ${i}`;
+        if (String(curSem) === String(i)) opt.selected = true;
+        semSel.appendChild(opt);
+    });
+}
+
+function openEditSubjectModal(id, name, semester, department, course_type) {
     document.getElementById('editSubjectId').value = id;
     document.getElementById('editSubjectName').value = name;
-    document.getElementById('editSubjectSemester').value = semester || '';
+    document.getElementById('editSubjectCourseType').value = course_type || 'CORE';
     document.getElementById('editSubjectDepartment').value = department || 'BCA';
+    onEditCourseTypeChange();
+    document.getElementById('editSubjectSemester').value = semester || '';
     document.getElementById('editSubjectAlert').innerHTML = '';
     openModal('modalEditSubject');
 }
@@ -1756,6 +2056,12 @@ async function submitEditSubject(e) {
     const id = data.subject_id;
     if (!data.semester) data.semester = null; else data.semester = parseInt(data.semester);
     delete data.subject_id;
+
+    // If disabled, FormData might omit it, so ensure department is set
+    if (!data.department || data.course_type !== 'CORE') {
+        data.department = (data.course_type === 'CORE') ? document.getElementById('editSubjectDepartment').value : 'General';
+    }
+
     btn.disabled = true; btn.textContent = 'Updating…';
     try {
         const r = await fetch(`/admin/api/subjects/${id}`, {
@@ -1816,7 +2122,7 @@ async function loadPapers() {
                 <td>${p.exam_type ? `<span class="badge badge-purple">${escHtml(p.exam_type)}</span>` : '—'}</td>
                 <td><span class="badge badge-gray" style="font-family:monospace;font-size:.8rem;">${escHtml(p.file_size_formatted || '—')}</span></td>
                 <td>${p.ai_analysis ? '<span class="badge badge-green">✓ Yes</span>' : '<span class="badge badge-gray">No</span>'}</td>
-                <td style="color:var(--text-secondary);font-size:.875rem">${p.upload_date ? new Date(p.upload_date).toLocaleDateString() : '—'}</td>
+                <td style="color:var(--text-secondary);font-size:.875rem">${formatIST(p.upload_date, false)}</td>
                 <td>
                     <div class="td-actions">
                         ${p.file_url ? `<a href="${escAttr(p.file_url)}" target="_blank" class="btn-icon" title="View PDF" style="color:var(--primary-blue)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>` : ''}
@@ -1854,14 +2160,33 @@ async function deletePaper(id) {
     } catch (err) { toast(err.message, 'error'); }
 }
 
+function detectExamType(filename) {
+    if (!filename) return '';
+    const fn = filename.toLowerCase();
+    if (fn.includes('ca-1') || fn.includes('ca1') || fn.includes('ca_1')) return 'CA-1';
+    if (fn.includes('ca-2') || fn.includes('ca2') || fn.includes('ca_2')) return 'CA-2';
+    if (fn.includes('ca-3') || fn.includes('ca3') || fn.includes('ca_3')) return 'CA-3';
+    if (fn.includes('sem-final') || fn.includes('sem_final') || fn.includes('-sem') || fn.includes('_sem')) return 'SEM-Final';
+    if (fn.includes('sea-i') || fn.includes('sea_i') || fn.includes('sea1') || fn.includes('sea-1')) return 'SEA I';
+    if (fn.includes('sea-ii') || fn.includes('sea_ii') || fn.includes('sea2') || fn.includes('sea-2')) return 'SEA II';
+    if (fn.includes('isa')) return 'ISA';
+    return '';
+}
+
 // ===== PENDING REVIEWS =====
+let _currentPendingMap = new Map();
+let _activeApprovalSet = new Set();
+
 async function loadPending() {
     const tbody = document.getElementById('pendingTableBody');
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading…</td></tr>';
     try {
         const r = await fetch('/admin/api/pending');
         if (!r.ok) throw new Error('Failed to load');
         const items = await r.json();
+
+        _currentPendingMap.clear();
+        items.forEach(item => _currentPendingMap.set(item.id, item));
 
         updatePendingBadge(items.length);
 
@@ -1875,36 +2200,56 @@ async function loadPending() {
         }
 
         tbody.innerHTML = items.map(item => {
-            const submittedAt = item.submitted_at
-                ? new Date(item.submitted_at).toLocaleString(undefined, {dateStyle:'medium', timeStyle:'short'})
-                : '—';
+            const submittedAt = formatIST(item.submitted_at, true);
             const previewBtn = item.preview_url
                 ? `<a href="${escAttr(item.preview_url)}" target="_blank" class="btn-icon" title="Preview PDF" style="color:var(--primary-blue)">
-                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
                    </a>`
                 : '';
-            return `<tr>
+            const uploaderHtml = item.uploader_name
+                ? `<div class="pending-meta" style="color:var(--text-primary);font-weight:500;display:flex;align-items:center;gap:0.35rem;margin-top:0.25rem;">
+                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--primary-blue);flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                       <span>${escHtml(item.uploader_name)}</span>
+                       ${item.uploader_email ? `<span style="color:var(--text-secondary);font-size:0.75rem;font-weight:400;">(${escHtml(item.uploader_email)})</span>` : ''}
+                   </div>`
+                : `<div class="pending-meta">By: ${escHtml(item.submitted_by_ip || 'Anonymous')}</div>`;
+
+            let actionsHtml = '';
+            if (item.status === 'processing') {
+                actionsHtml = `<span class="badge badge-purple" style="font-size:0.75rem;padding:0.35rem 0.65rem;display:inline-flex;align-items:center;gap:0.35rem;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px;height:12px;animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+                    Processing…
+                </span>`;
+                // Auto attach poller if item is processing on page load
+                pollApprovalStatus(item.id, item.file_name);
+            } else {
+                actionsHtml = `
+                    ${previewBtn}
+                    <button class="btn-icon approve" title="Approve & Publish"
+                        onclick="openApproveModal(${item.id}, '${escAttr(item.file_name || '')}', '${escAttr(item.exam_type || '')}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12"/></svg>
+                    </button>
+                    <button class="btn-icon delete" title="Reject & Delete"
+                        onclick="openRejectModal(${item.id}, '${escAttr(item.file_name || '')}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                `;
+            }
+
+            return `<tr data-pending-id="${item.id}">
                 <td>
                     <div class="pending-file">${escHtml(item.file_name || '—')}</div>
-                    <div class="pending-meta">From: ${escHtml(item.submitted_by_ip || '—')}</div>
+                    ${uploaderHtml}
                 </td>
                 <td style="font-weight:600">${escHtml(item.subject_name || '—')}</td>
                 <td>${item.semester ? `<span class="badge badge-blue">Sem ${item.semester}</span>` : '—'}</td>
                 <td>${item.year || '—'}</td>
-                <td>${item.exam_type ? `<span class="badge badge-purple">${escHtml(item.exam_type)}</span>` : '<span class="badge badge-gray">—</span>'}</td>
+                <td>${item.exam_type ? `<span class="badge badge-purple">${escHtml(item.exam_type)}</span>` : (detectExamType(item.file_name) ? `<span class="badge badge-purple" style="opacity:0.8" title="Inferred from filename">${escHtml(detectExamType(item.file_name))} <span style="font-size:.65rem;opacity:.75">auto</span></span>` : '<span class="badge badge-gray">—</span>')}</td>
                 <td><span class="badge badge-gray" style="font-family:monospace;font-size:.8rem;">${escHtml(item.formatted_file_size || '—')}</span></td>
                 <td style="color:var(--text-secondary);font-size:.875rem">${submittedAt}</td>
                 <td>
                     <div class="td-actions">
-                        ${previewBtn}
-                        <button class="btn-icon approve" title="Approve & Publish"
-                            onclick="openApproveModal(${item.id}, '${escAttr(item.file_name || '')}')">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12"/></svg>
-                        </button>
-                        <button class="btn-icon delete" title="Reject & Delete"
-                            onclick="openRejectModal(${item.id}, '${escAttr(item.file_name || '')}')">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        </button>
+                        ${actionsHtml}
                     </div>
                 </td>
             </tr>`;
@@ -1914,33 +2259,108 @@ async function loadPending() {
     }
 }
 
-function openApproveModal(id, filename) {
+function openApproveModal(id, filename, currentExamType) {
     document.getElementById('approveModalBody').textContent =
-        `Approve "${filename || 'this paper'}"? It will be moved to the main storage bucket and published to the portal immediately.`;
+        `Approve "${filename || 'this paper'}"? It will be published to the portal in the background.`;
+    const examSelect = document.getElementById('approveExamType');
+    if (examSelect) {
+        const detected = currentExamType || detectExamType(filename);
+        examSelect.value = detected || '';
+    }
     document.getElementById('confirmApproveBtn').onclick = () => approvePending(id);
     openModal('modalConfirmApprove');
 }
 
 async function approvePending(id) {
-    const btn = document.getElementById('confirmApproveBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:15px;height:15px;stroke-width:2.5"><polyline points="20,6 9,17 4,12"/></svg> Publishing…';
+    const examSelect = document.getElementById('approveExamType');
+    const selectedExam = examSelect ? examSelect.value.trim() : '';
+    const pendingItem = _currentPendingMap.get(id);
+    const fileName = pendingItem ? pendingItem.file_name : 'Paper';
+
+    // Immediately close modal so the admin is never kept waiting
+    closeModal('modalConfirmApprove');
+
+    // Show instant background processing toast
+    toast(`Approval started in background for "${fileName}"…`, 'info', 3500);
+
+    // Optimistically update the table row to show spinner badge
+    const row = document.querySelector(`tr[data-pending-id="${id}"]`);
+    if (row) {
+        const tdActions = row.querySelector('.td-actions');
+        if (tdActions) {
+            tdActions.innerHTML = `<span class="badge badge-purple" style="font-size:0.75rem;padding:0.35rem 0.65rem;display:inline-flex;align-items:center;gap:0.35rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px;height:12px;animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+                Processing…
+            </span>`;
+        }
+    }
+
     try {
         const r = await fetch(`/admin/api/pending/${id}/approve`, {
             method: 'POST',
-            headers: {'X-CSRFToken': getCsrf()}
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrf()
+            },
+            body: JSON.stringify({ exam_type: selectedExam })
         });
         const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Approve failed');
-        toast('Paper approved and published!');
-        closeModal('modalConfirmApprove');
-        loadPending();
+        if (!r.ok) throw new Error(d.error || 'Failed to trigger approval');
+
+        pollApprovalStatus(id, d.file_name || fileName);
     } catch (err) {
-        toast(err.message, 'error');
-        closeModal('modalConfirmApprove');
+        toast(err.message, 'error', 5000);
+        loadPending();
     }
-    btn.disabled = false;
-    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:15px;height:15px;stroke-width:2.5"><polyline points="20,6 9,17 4,12"/></svg> Yes, Publish';
+}
+
+function pollApprovalStatus(id, initialFileName) {
+    if (_activeApprovalSet.has(id)) return;
+    _activeApprovalSet.add(id);
+
+    let attempts = 0;
+    const maxAttempts = 60; // 60 * 1.5s = 90s max polling duration
+    const interval = setInterval(async () => {
+        attempts++;
+        try {
+            const res = await fetch(`/admin/api/pending/${id}/status`);
+            if (!res.ok) {
+                if (attempts >= maxAttempts) {
+                    clearInterval(interval);
+                    _activeApprovalSet.delete(id);
+                }
+                return;
+            }
+            const data = await res.json();
+            const currentName = data.file_name || initialFileName || 'Paper';
+
+            if (data.status === 'completed' || data.status === 'approved') {
+                clearInterval(interval);
+                _activeApprovalSet.delete(id);
+
+                toast(`✅ "${currentName}" approved and published successfully!`, 'success', 5000);
+
+                loadPending();
+                if (typeof loadPapers === 'function') loadPapers();
+                if (typeof loadStats === 'function') loadStats();
+            } else if (data.status === 'failed') {
+                clearInterval(interval);
+                _activeApprovalSet.delete(id);
+                toast(`❌ Approval failed for "${currentName}": ${data.error || 'Unknown error'}`, 'error', 6500);
+                loadPending();
+            } else if (attempts >= maxAttempts) {
+                clearInterval(interval);
+                _activeApprovalSet.delete(id);
+                toast(`Approval for "${currentName}" is taking longer than expected. Please check again shortly.`, 'info', 4000);
+                loadPending();
+            }
+        } catch (e) {
+            if (attempts >= maxAttempts) {
+                clearInterval(interval);
+                _activeApprovalSet.delete(id);
+            }
+        }
+    }, 1500);
 }
 
 function openRejectModal(id, filename) {
@@ -1969,9 +2389,106 @@ async function rejectPending(id) {
         toast(err.message, 'error');
     }
 }
+// ===== USERS MANAGEMENT =====
+let _allUsers = [];
 
-// ===== CHANGE PASSWORD =====
+async function loadUsers() {
+    const tbody = document.getElementById('usersTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-secondary)">Loading users…</td></tr>';
+    try {
+        const r = await fetch('/admin/api/users');
+        if (!r.ok) throw new Error('Failed to load users');
+        _allUsers = await r.json();
+
+        updateUsersBadge(_allUsers.length);
+        filterUsersList();
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--accent-red);padding:2rem">Failed to load registered users.</td></tr>';
+    }
+}
+
+function filterUsersList() {
+    const q = (document.getElementById('usersSearchInput')?.value || '').toLowerCase().trim();
+    const roleFilter = document.getElementById('usersRoleFilter')?.value || '';
+
+    const filtered = _allUsers.filter(u => {
+        const nameMatch = (u.name || '').toLowerCase().includes(q) ||
+                          (u.email || '').toLowerCase().includes(q) ||
+                          (u.username || '').toLowerCase().includes(q) ||
+                          String(u.user_id).includes(q);
+        const roleMatch = !roleFilter || u.role === roleFilter;
+        return nameMatch && roleMatch;
+    });
+
+    renderUsers(filtered);
+}
+
+function renderUsers(users) {
+    const tbody = document.getElementById('usersTableBody');
+    if (!tbody) return;
+
+    if (!users.length) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <h3>No users found</h3>
+            <p>Try adjusting your search query or role filter.</p>
+        </div></td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = users.map(u => {
+        const initial = (u.name || u.email || 'U')[0].toUpperCase();
+        const lastLoginStr = formatIST(u.last_login, true);
+        const roleBadge = u.role === 'admin'
+            ? '<span class="badge badge-purple">Admin</span>'
+            : '<span class="badge badge-blue">Student</span>';
+        const papersCount = parseInt(u.approved_papers_count, 10) || 0;
+        const countBadge = papersCount > 0
+            ? `<span class="badge badge-green" style="font-weight:700;font-size:0.8125rem;">${papersCount} paper${papersCount === 1 ? '' : 's'}</span>`
+            : `<span style="color:var(--text-secondary);font-size:0.85rem;">0</span>`;
+
+        return `<tr>
+            <td>
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg, var(--primary-blue), var(--primary-purple));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8125rem;flex-shrink:0;">
+                        ${initial}
+                    </div>
+                    <div>
+                        <div style="font-weight:600;color:var(--text-primary);">${escHtml(u.name)}</div>
+                        ${u.username ? `<div style="font-size:0.75rem;color:var(--text-secondary);">@${escHtml(u.username)}</div>` : ''}
+                    </div>
+                </div>
+            </td>
+            <td>
+                <a href="mailto:${escAttr(u.email)}" style="color:var(--primary-blue);text-decoration:none;font-weight:500;">
+                    ${escHtml(u.email || '—')}
+                </a>
+            </td>
+            <td>${roleBadge}</td>
+            <td>${countBadge}</td>
+            <td style="color:var(--text-secondary);font-size:.875rem">${lastLoginStr}</td>
+            <td><code style="font-size:.8125rem;background:var(--bg-secondary);padding:.2rem .45rem;border-radius:4px;color:var(--text-secondary);">#${u.user_id}</code></td>
+        </tr>`;
+    }).join('');
+}
+
 // ===== HELPERS =====
+function formatIST(dateStr, includeTime = true) {
+    if (!dateStr) return '—';
+    let s = String(dateStr).trim();
+    // If no timezone offset (Z, +HH:MM, -HH:MM) is present at the end of the string, treat as UTC and append 'Z'
+    if (!/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(s)) {
+        if (!s.includes('T')) s = s.replace(' ', 'T');
+        s = s + 'Z';
+    }
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return String(dateStr);
+    const options = { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' };
+    if (includeTime) { options.hour = 'numeric'; options.minute = '2-digit'; options.hour12 = true; }
+    return d.toLocaleString('en-IN', options);
+}
+
 function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

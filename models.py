@@ -9,8 +9,11 @@ _CACHE_TTL = 300
 _CONN_IDLE_TIMEOUT = 30
 _conn_last_used = {}
 
-# DB Connection Pool
-db_pool = pool.SimpleConnectionPool(1, 10, config.DATABASE_URL)
+# DB Connection Pool (Thread-safe for Gunicorn multi-threading & background workers)
+try:
+    db_pool = pool.ThreadedConnectionPool(1, 10, config.DATABASE_URL)
+except Exception:
+    db_pool = None
 
 
 def get_db():
@@ -81,7 +84,8 @@ def init_db():
                 name VARCHAR(255),
                 role VARCHAR(20) NOT NULL DEFAULT 'user',
                 last_login TIMESTAMP,
-                token_version INTEGER DEFAULT 0
+                token_version INTEGER DEFAULT 0,
+                approved_papers_count INTEGER DEFAULT 0
             );
         """)
         cur.execute("""
@@ -90,7 +94,8 @@ def init_db():
                 subject_name VARCHAR(255) NOT NULL,
                 semester INTEGER,
                 department VARCHAR(50),
-                department_id INTEGER REFERENCES departments(department_id)
+                department_id INTEGER REFERENCES departments(department_id),
+                course_type VARCHAR(20) DEFAULT 'CORE'
             );
         """)
         cur.execute("""
@@ -105,7 +110,8 @@ def init_db():
                 file_url TEXT,
                 public_id TEXT,
                 ai_analysis TEXT,
-                file_size BIGINT
+                file_size BIGINT,
+                user_id INTEGER REFERENCES users(user_id)
             );
         """)
         cur.execute("""
@@ -119,19 +125,35 @@ def init_db():
                 submitted_by_ip VARCHAR(50),
                 submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 status VARCHAR(20) DEFAULT 'pending',
-                file_size BIGINT
+                file_size BIGINT,
+                user_id INTEGER REFERENCES users(user_id)
             );
         """)
+
+        # Alter table if needed for existing DB
+        cur.execute("ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_type VARCHAR(20) DEFAULT 'CORE';")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_papers_count INTEGER DEFAULT 0;")
+        cur.execute("ALTER TABLE pending_papers ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(user_id);")
+        cur.execute("ALTER TABLE question_papers ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(user_id);")
 
         # Indexes for query performance optimization
         cur.execute("CREATE INDEX IF NOT EXISTS idx_departments_slug_active ON departments(slug, is_active);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_subjects_department_id ON subjects(department_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_subjects_dept_sem ON subjects(department_id, semester);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_subjects_course_type_sem ON subjects(course_type, semester);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_question_papers_subject_id ON question_papers(subject_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_question_papers_subject_year ON question_papers(subject_id, year DESC);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_question_papers_upload_date ON question_papers(upload_date);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_question_papers_user_id ON question_papers(user_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_pending_papers_status ON pending_papers(status);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_pending_papers_subject_id ON pending_papers(subject_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_pending_papers_user_id ON pending_papers(user_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_pending_papers_status_submitted ON pending_papers(status, submitted_at DESC);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_qp_subj_yr_exam ON question_papers(subject_id, year, exam_type);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_pp_subj_yr_exam ON pending_papers(subject_id, year, exam_type) WHERE status = 'pending';")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login DESC NULLS LAST, user_id DESC);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_approved_papers ON users(approved_papers_count DESC);")
 
         conn.commit()
     finally:
@@ -158,10 +180,22 @@ def get_departments(active_only=True):
     try:
         query = """
             SELECT d.department_id, d.slug, d.name, d.code, d.description, d.is_active, d.is_coming_soon, d.display_order,
-                   d.stream, COUNT(q.paper_id) as paper_count
+                   d.stream, COUNT(DISTINCT q.paper_id) as paper_count
             FROM departments d
-            LEFT JOIN subjects s ON d.department_id = s.department_id
-            LEFT JOIN question_papers q ON s.subject_id = q.subject_id
+            LEFT JOIN (
+                SELECT q.paper_id, s.department_id, COALESCE(s.course_type, 'CORE') as course_type, s.semester
+                FROM question_papers q
+                JOIN subjects s ON q.subject_id = s.subject_id
+            ) q ON (
+                (q.course_type = 'CORE' AND q.department_id = d.department_id)
+                OR (
+                    COALESCE(d.stream, 'FYUGP') = 'FYUGP' AND (
+                        (q.course_type = 'AEC' AND q.semester IN (1, 2))
+                        OR (LOWER(d.slug) NOT IN ('bca', 'bba') AND q.course_type = 'MDC' AND q.semester IN (1, 2))
+                        OR (LOWER(d.slug) NOT IN ('bca', 'bba') AND q.course_type = 'VAC' AND q.semester IN (3, 4))
+                    )
+                )
+            )
             WHERE (%s = false OR d.is_active = true)
             GROUP BY d.department_id, d.slug, d.name, d.code, d.description, d.is_active, d.is_coming_soon, d.display_order, d.stream
             ORDER BY d.display_order ASC, d.name ASC;
@@ -232,8 +266,10 @@ def get_departments_dict(departments_list=None):
 def is_valid_department(name):
     if not name:
         return False
-    dept_dict = get_departments_dict()
     name_str = str(name).strip()
+    if name_str.lower() in ('general', 'common'):
+        return True
+    dept_dict = get_departments_dict()
     return (
         name_str in dept_dict.values()
         or name_str in dept_dict.keys()
@@ -246,6 +282,8 @@ def get_department_id_by_name_or_slug(dept_input):
     if not dept_input:
         return None
     dept_input_lower = str(dept_input).strip().lower()
+    if dept_input_lower in ('general', 'common'):
+        return None
     depts = get_departments(active_only=False)
     for d in depts:
         if d["slug"].lower() == dept_input_lower or d["name"].lower() == dept_input_lower or (d.get("code") and d["code"].lower() == dept_input_lower):
@@ -277,20 +315,36 @@ def get_subjects(department=None):
     cur = conn.cursor()
     try:
         if department:
-            cur.execute(
-                """
-                SELECT s.subject_id, s.subject_name, s.semester, COALESCE(d.name, s.department) as department
-                FROM subjects s
-                LEFT JOIN departments d ON s.department_id = d.department_id
-                WHERE d.slug = %s OR LOWER(s.department) = LOWER(%s)
-                ORDER BY s.semester, s.subject_name
-                """,
-                (department, department),
-            )
+            dept_clean = str(department).strip().lower()
+            if dept_clean in ('general', 'common'):
+                cur.execute(
+                    """
+                    SELECT s.subject_id, s.subject_name, s.semester, 'General' as department,
+                           COALESCE(s.course_type, 'CORE') as course_type
+                    FROM subjects s
+                    WHERE s.course_type IN ('AEC', 'MDC', 'VAC')
+                    ORDER BY s.semester, s.subject_name
+                    """
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT s.subject_id, s.subject_name, s.semester,
+                           COALESCE(d.name, s.department) as department,
+                           COALESCE(s.course_type, 'CORE') as course_type
+                    FROM subjects s
+                    LEFT JOIN departments d ON s.department_id = d.department_id
+                    WHERE d.slug = %s OR LOWER(s.department) = LOWER(%s)
+                    ORDER BY s.semester, s.subject_name
+                    """,
+                    (department, department),
+                )
         else:
             cur.execute(
                 """
-                SELECT s.subject_id, s.subject_name, s.semester, COALESCE(d.name, s.department) as department
+                SELECT s.subject_id, s.subject_name, s.semester,
+                       COALESCE(d.name, s.department) as department,
+                       COALESCE(s.course_type, 'CORE') as course_type
                 FROM subjects s
                 LEFT JOIN departments d ON s.department_id = d.department_id
                 ORDER BY s.semester, s.subject_name
@@ -303,6 +357,7 @@ def get_subjects(department=None):
                 "subject_name": r[1],
                 "semester": r[2],
                 "department": r[3],
+                "course_type": r[4] or "CORE",
             }
             for r in rows
         ]
@@ -320,6 +375,11 @@ def get_department_papers(department_slug_or_name):
     if cache_entry and (now - cache_entry["timestamp"]) < _CACHE_TTL:
         return cache_entry["papers"]
 
+    dept = get_department_by_slug(key)
+    dept_id = dept["id"] if dept else None
+    dept_stream = dept["stream"] if dept else ("5year" if key == "msc-physics" else "FYUGP")
+    dept_slug = (dept["slug"] if dept else key).lower()
+
     conn = get_db()
     cur = conn.cursor()
     papers = []
@@ -327,24 +387,34 @@ def get_department_papers(department_slug_or_name):
         cur.execute(
             """
             SELECT s.subject_name, s.semester, q.year, q.file_url, q.exam_type, q.paper_id,
-                   s.department,
+                   COALESCE(s.course_type, 'CORE') as course_type,
+                   COALESCE(s.department, 'General') as department,
                    CASE WHEN q.ai_analysis IS NOT NULL THEN true ELSE false END as is_analysed
             FROM question_papers q
             JOIN subjects s ON q.subject_id = s.subject_id
-            JOIN departments d ON s.department_id = d.department_id
-            WHERE d.slug = %s OR LOWER(d.name) = %s
+            WHERE (
+                (s.department_id = %s AND COALESCE(s.course_type, 'CORE') = 'CORE')
+                OR (
+                    %s = 'FYUGP' AND (
+                        (s.course_type = 'AEC' AND s.semester IN (1, 2))
+                        OR (%s NOT IN ('bca', 'bba') AND s.course_type = 'MDC' AND s.semester IN (1, 2))
+                        OR (%s NOT IN ('bca', 'bba') AND s.course_type = 'VAC' AND s.semester IN (3, 4))
+                    )
+                )
+            )
             ORDER BY s.subject_name ASC, q.year DESC
             """,
-            (key, key),
+            (dept_id, dept_stream, dept_slug, dept_slug),
         )
         rows = cur.fetchall()
 
-        for subject_name, semester, year, file_url, exam_type, paper_id, dept, is_analysed in rows:
+        for subject_name, semester, year, file_url, exam_type, paper_id, course_type, dept_name, is_analysed in rows:
             papers.append({
                 "subject": subject_name,
                 "year": year,
                 "semester": semester,
-                "department": dept or "",
+                "department": dept_name or "",
+                "course_type": course_type or "CORE",
                 "examType": exam_type or "—",
                 "file_url": f"/paper/{paper_id}/view",
                 "download_url": f"/paper/{paper_id}/download",
@@ -367,6 +437,11 @@ def get_department_papers_and_subjects(department_slug):
     if cache_entry and (now - cache_entry["timestamp"]) < _CACHE_TTL and "subjects" in cache_entry:
         return cache_entry["papers"], cache_entry["subjects"]
 
+    dept = get_department_by_slug(key)
+    dept_id = dept["id"] if dept else None
+    dept_stream = dept["stream"] if dept else ("5year" if key == "msc-physics" else "FYUGP")
+    dept_slug = (dept["slug"] if dept else key).lower()
+
     conn = get_db()
     cur = conn.cursor()
     papers = []
@@ -375,23 +450,33 @@ def get_department_papers_and_subjects(department_slug):
         cur.execute(
             """
             SELECT s.subject_name, s.semester, q.year, q.file_url, q.exam_type, q.paper_id,
-                   s.department,
+                   COALESCE(s.course_type, 'CORE') as course_type,
+                   COALESCE(s.department, 'General') as department,
                    CASE WHEN q.ai_analysis IS NOT NULL THEN true ELSE false END as is_analysed
             FROM question_papers q
             JOIN subjects s ON q.subject_id = s.subject_id
-            JOIN departments d ON s.department_id = d.department_id
-            WHERE d.slug = %s OR LOWER(d.name) = %s
+            WHERE (
+                (s.department_id = %s AND COALESCE(s.course_type, 'CORE') = 'CORE')
+                OR (
+                    %s = 'FYUGP' AND (
+                        (s.course_type = 'AEC' AND s.semester IN (1, 2))
+                        OR (%s NOT IN ('bca', 'bba') AND s.course_type = 'MDC' AND s.semester IN (1, 2))
+                        OR (%s NOT IN ('bca', 'bba') AND s.course_type = 'VAC' AND s.semester IN (3, 4))
+                    )
+                )
+            )
             ORDER BY s.subject_name ASC, q.year DESC
             """,
-            (key, key),
+            (dept_id, dept_stream, dept_slug, dept_slug),
         )
         rows = cur.fetchall()
-        for subject_name, semester, year, file_url, exam_type, paper_id, dept, is_analysed in rows:
+        for subject_name, semester, year, file_url, exam_type, paper_id, course_type, dept_name, is_analysed in rows:
             papers.append({
                 "subject": subject_name,
                 "year": year,
                 "semester": semester,
-                "department": dept or "",
+                "department": dept_name or "",
+                "course_type": course_type or "CORE",
                 "examType": exam_type or "—",
                 "file_url": f"/paper/{paper_id}/view",
                 "download_url": f"/paper/{paper_id}/download",
@@ -401,13 +486,23 @@ def get_department_papers_and_subjects(department_slug):
 
         cur.execute(
             """
-            SELECT s.subject_id, s.subject_name, s.semester, COALESCE(d.name, s.department) as department
+            SELECT s.subject_id, s.subject_name, s.semester,
+                   COALESCE(s.department, 'General') as department,
+                   COALESCE(s.course_type, 'CORE') as course_type
             FROM subjects s
-            JOIN departments d ON s.department_id = d.department_id
-            WHERE d.slug = %s OR LOWER(d.name) = %s
+            WHERE (
+                (s.department_id = %s AND COALESCE(s.course_type, 'CORE') = 'CORE')
+                OR (
+                    %s = 'FYUGP' AND (
+                        (s.course_type = 'AEC' AND s.semester IN (1, 2))
+                        OR (%s NOT IN ('bca', 'bba') AND s.course_type = 'MDC' AND s.semester IN (1, 2))
+                        OR (%s NOT IN ('bca', 'bba') AND s.course_type = 'VAC' AND s.semester IN (3, 4))
+                    )
+                )
+            )
             ORDER BY s.semester, s.subject_name
             """,
-            (key, key),
+            (dept_id, dept_stream, dept_slug, dept_slug),
         )
         sub_rows = cur.fetchall()
         subjects = [
@@ -416,6 +511,7 @@ def get_department_papers_and_subjects(department_slug):
                 "subject_name": r[1],
                 "semester": r[2],
                 "department": r[3],
+                "course_type": r[4] or "CORE",
             }
             for r in sub_rows
         ]
@@ -424,3 +520,68 @@ def get_department_papers_and_subjects(department_slug):
     finally:
         cur.close()
         return_db(conn)
+
+
+def check_duplicate_paper(subject_id, year, exam_type, include_pending=True):
+    """
+    Checks if a paper already exists for the given subject_id, year, and exam_type.
+    Rules:
+    - Same subject (and thus same sem and department/general), same year, and same exam_type -> DUPLICATE.
+    - Same year, different exam_type -> NOT duplicate.
+    - Different year, same exam_type -> NOT duplicate.
+    Returns:
+        dict: {"is_duplicate": bool, "status": "approved" | "pending" | None, "message": str}
+    """
+    if not subject_id or not year or not exam_type:
+        return {"is_duplicate": False, "status": None, "message": ""}
+
+    clean_exam_type = str(exam_type).strip()
+    if not clean_exam_type:
+        return {"is_duplicate": False, "status": None, "message": ""}
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        # 1. Check published question_papers
+        cur.execute(
+            """
+            SELECT paper_id FROM question_papers
+            WHERE subject_id = %s
+              AND year = %s
+              AND LOWER(TRIM(exam_type)) = LOWER(TRIM(%s))
+            LIMIT 1;
+            """,
+            (subject_id, year, clean_exam_type)
+        )
+        if cur.fetchone():
+            return {
+                "is_duplicate": True,
+                "status": "approved",
+                "message": "Already this paper is uploaded."
+            }
+
+        # 2. Check pending_papers (under review)
+        if include_pending:
+            cur.execute(
+                """
+                SELECT id FROM pending_papers
+                WHERE subject_id = %s
+                  AND year = %s
+                  AND LOWER(TRIM(exam_type)) = LOWER(TRIM(%s))
+                  AND status = 'pending'
+                LIMIT 1;
+                """,
+                (subject_id, year, clean_exam_type)
+            )
+            if cur.fetchone():
+                return {
+                    "is_duplicate": True,
+                    "status": "pending",
+                    "message": "Already this paper is uploaded and pending review."
+                }
+
+        return {"is_duplicate": False, "status": None, "message": ""}
+    finally:
+        cur.close()
+        return_db(conn)
+

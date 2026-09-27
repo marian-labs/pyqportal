@@ -199,6 +199,7 @@
                                     </label>
                                     <select id="uploadDepartment" name="department" class="form-control" required>
                                         <option value="">Select Department</option>
+                                        <option value="General" data-stream="FYUGP" data-slug="general">General / Common (AEC, MDC, VAC)</option>
                                         {% if departments_list %}
                                             {% for d in departments_list %}
                                             <option value="{{ d.name }}" data-stream="{{ d.stream }}" data-slug="{{ d.slug }}">{{ d.name }}</option>
@@ -212,40 +213,51 @@
                                     <span class="error-message" id="departmentError"></span>
                                 </div>
 
-                                <div class="form-group">
-                                    <label class="form-label" for="uploadSubject">
-                                        Subject <span class="required">*</span>
+                                <div class="form-group" id="uploadCourseTypeGroup" style="display:none;">
+                                    <label class="form-label" for="uploadCourseType">
+                                        Course Type <span class="required">*</span>
                                     </label>
-                                    <select id="uploadSubject" name="subject_id" class="form-control" required>
-                                        <option value="">Select Department first</option>
-                                        {% for s in subjects|default([]) %}
-                                        <option value="{{ s.subject_id }}"
-                                                data-department="{{ s.department }}"
-                                                data-semester="{{ s.semester }}">
-                                            {{ s.subject_name }}{% if s.semester %} (Sem {{ s.semester }}){% endif %}
-                                        </option>
-                                        {% endfor %}
+                                    <select id="uploadCourseType" name="course_type" class="form-control">
+                                        <option value="">Select Course Type</option>
+                                        <option value="AEC">AEC</option>
+                                        <option value="MDC">MDC</option>
+                                        <option value="VAC">VAC</option>
                                     </select>
-                                    <span class="error-message" id="subjectError"></span>
+                                    <span class="error-message" id="courseTypeError"></span>
                                 </div>
-                            </div>
 
-                            <!-- ROW 2: Semester (auto-filled) + Year -->
-                            <div class="form-row">
                                 <div class="form-group">
                                     <label class="form-label" for="uploadSemester">
                                         Semester <span class="required">*</span>
-                                        <span style="font-size:.75rem;font-weight:400;color:#6b7280;margin-left:.3rem;">(auto-filled)</span>
                                     </label>
-                                    <select id="uploadSemester" name="semester" class="form-control" required
-                                            style="background:#f3f4f6;cursor:not-allowed;"
-                                            title="Auto-filled when you pick a subject">
-                                        <option value="">Auto</option>
+                                    <select id="uploadSemester" name="semester" class="form-control" required>
+                                        <option value="">Select Semester</option>
                                         {% for sem_num in range(1, 11) %}
                                         <option value="{{ sem_num }}">Semester {{ sem_num }}</option>
                                         {% endfor %}
                                     </select>
                                     <span class="error-message" id="semesterError"></span>
+                                </div>
+                            </div>
+
+                            <!-- ROW 2: Subject + Year -->
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label" for="uploadSubject">
+                                        Subject <span class="required">*</span>
+                                    </label>
+                                    <select id="uploadSubject" name="subject_id" class="form-control" required>
+                                        <option value="">Select Department &amp; Semester first</option>
+                                        {% for s in subjects|default([]) %}
+                                        <option value="{{ s.subject_id }}"
+                                                data-department="{{ s.department }}"
+                                                data-semester="{{ s.semester }}"
+                                                data-course-type="{{ s.course_type or 'CORE' }}">
+                                            {{ s.subject_name }}{% if s.course_type and s.course_type != 'CORE' %} [{{ s.course_type }}]{% elif s.semester %} (Sem {{ s.semester }}){% endif %}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <span class="error-message" id="subjectError"></span>
                                 </div>
 
                                 <div class="form-group">
@@ -254,12 +266,9 @@
                                     </label>
                                     <select id="uploadYear" name="year" class="form-control" required>
                                         <option value="">Select Year</option>
-                                        <option value="2021">2021</option>
-                                        <option value="2022">2022</option>
-                                        <option value="2023">2023</option>
-                                        <option value="2024">2024</option>
-                                        <option value="2025">2025</option>
-                                        <option value="2026">2026</option>
+                                        {% for y in upload_years %}
+                                        <option value="{{ y }}" {% if request.form.get('year')|string == y|string %}selected{% endif %}>{{ y }}</option>
+                                        {% endfor %}
                                     </select>
                                     <span class="error-message" id="yearError"></span>
                                 </div>
@@ -318,6 +327,11 @@
                                     Additional Notes (Optional)
                                 </label>
                                 <textarea id="uploadNotes" name="notes" class="form-control" rows="4" placeholder="Any additional information about this paper..."></textarea>
+                            </div>
+
+                            <!-- Immediate Duplicate Paper Warning Banner -->
+                            <div id="duplicateAlert" class="error-alert" style="display:none; margin-bottom: 1.25rem; font-weight:600;">
+                                ⚠️ <span id="duplicateAlertText">Already this paper is uploaded.</span>
                             </div>
 
                             <div class="form-actions">
@@ -489,6 +503,109 @@
 
             deptSel.addEventListener('change', updateExamTypes);
             updateExamTypes();
+
+            // Real-time Duplicate check logic
+            let dupTimer = null;
+            let isDuplicatePaper = false;
+            const subSel = document.getElementById('uploadSubject');
+            const yrSel = document.getElementById('uploadYear');
+            const uploadForm = document.getElementById('uploadForm');
+            const submitBtn = uploadForm ? uploadForm.querySelector('button[type="submit"]') : null;
+            const dupAlert = document.getElementById('duplicateAlert');
+            const dupAlertText = document.getElementById('duplicateAlertText');
+
+            // Ensure dynamic year options up to max(2028, currentYear)
+            (function ensureYearDropdown() {
+                if (!yrSel) return;
+                const curVal = yrSel.value || "{{ request.form.get('year', '') }}";
+                const startYear = 2024;
+                const maxYear = Math.max(2028, new Date().getFullYear());
+                const existingYears = Array.from(yrSel.options).map(o => parseInt(o.value, 10)).filter(Boolean);
+                for (let y = startYear; y <= maxYear; y++) {
+                    if (!existingYears.includes(y)) {
+                        const opt = document.createElement('option');
+                        opt.value = y;
+                        opt.textContent = y;
+                        yrSel.appendChild(opt);
+                    }
+                }
+                if (curVal) yrSel.value = curVal;
+            })();
+
+            const uploadFileInput = document.getElementById('uploadFile');
+            const fileUploadArea = document.getElementById('fileUploadArea');
+
+            function setUploadBlocked(blocked) {
+                if (uploadFileInput) uploadFileInput.disabled = blocked;
+                if (fileUploadArea) {
+                    if (blocked) {
+                        fileUploadArea.style.pointerEvents = 'none';
+                        fileUploadArea.style.opacity = '0.45';
+                        fileUploadArea.style.filter = 'grayscale(1)';
+                        fileUploadArea.title = 'Upload blocked: This paper is already uploaded.';
+                    } else {
+                        fileUploadArea.style.pointerEvents = '';
+                        fileUploadArea.style.opacity = '';
+                        fileUploadArea.style.filter = '';
+                        fileUploadArea.title = '';
+                    }
+                }
+            }
+
+            async function checkDuplicate() {
+                const subId = subSel ? subSel.value : '';
+                const yr = yrSel ? yrSel.value : '';
+                const ex = examSel ? examSel.value : '';
+
+                if (!subId || !yr || !ex) {
+                    if (dupAlert) dupAlert.style.display = 'none';
+                    isDuplicatePaper = false;
+                    if (submitBtn) submitBtn.disabled = false;
+                    setUploadBlocked(false);
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`/api/check-paper-duplicate?include_pending=false&subject_id=${encodeURIComponent(subId)}&year=${encodeURIComponent(yr)}&exam_type=${encodeURIComponent(ex)}`);
+                    const data = await res.json();
+                    if (data && data.is_duplicate) {
+                        isDuplicatePaper = true;
+                        if (dupAlert && dupAlertText) {
+                            dupAlertText.textContent = data.message || 'Already this paper is uploaded.';
+                            dupAlert.style.display = 'block';
+                        }
+                        if (submitBtn) submitBtn.disabled = true;
+                        setUploadBlocked(true);
+                    } else {
+                        isDuplicatePaper = false;
+                        if (dupAlert) dupAlert.style.display = 'none';
+                        if (submitBtn) submitBtn.disabled = false;
+                        setUploadBlocked(false);
+                    }
+                } catch (e) {
+                    console.warn(e);
+                }
+            }
+
+            function triggerDupCheck() {
+                clearTimeout(dupTimer);
+                dupTimer = setTimeout(checkDuplicate, 200);
+            }
+
+            if (subSel) subSel.addEventListener('change', triggerDupCheck);
+            if (yrSel) yrSel.addEventListener('change', triggerDupCheck);
+            if (examSel) examSel.addEventListener('change', triggerDupCheck);
+
+            if (uploadForm) {
+                uploadForm.addEventListener('submit', function(e) {
+                    if (isDuplicatePaper) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        alert('Already this paper is uploaded.');
+                        return false;
+                    }
+                }, true);
+            }
         })();
     </script>
 </body>
