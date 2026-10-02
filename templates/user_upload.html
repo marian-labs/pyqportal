@@ -2444,112 +2444,87 @@
                 if (statusEl) statusEl.textContent = 'Uploading paper...';
             }
 
-            // Build FormData directly to avoid mobile Android content:// handle issues with new FormData(form)
-            const formData = new FormData();
+            // ── Upload via fetch() ──────────────────────────────────────────────────────
+            // We use fetch() instead of XHR because on Android Chrome, XHR.send()
+            // with multipart FormData containing a File backed by a content:// URI
+            // triggers net::ERR_FAILED. fetch() with a plain Blob (from arrayBuffer)
+            // is reliable across all platforms including mobile.
             const csrfEl = form.querySelector('input[name="csrf_token"]');
-            if (csrfEl && csrfEl.value) {
-                formData.append('csrf_token', csrfEl.value);
-            }
-            if (deptSel && deptSel.value) formData.append('department', deptSel.value);
-            if (courseTypeSel && courseTypeSel.value) formData.append('course_type', courseTypeSel.value);
-            if (semSel && semSel.value) formData.append('semester', semSel.value);
-            if (subjectSel && subjectSel.value) formData.append('subject_id', subjectSel.value);
-            const yrInput = document.getElementById('year');
-            const yrVal = yrInput ? yrInput.value.trim() : '';
-            formData.append('year', yrVal);
-            if (examTypeSel && examTypeSel.value) formData.append('exam_type', examTypeSel.value);
+            const uploadAction = form.getAttribute('action') || '/user-upload';
 
-            const uploadFileName = (finalFile && finalFile.name) ? finalFile.name : (selectedUploadFileName || 'document.pdf');
-            formData.append('file', finalFile, uploadFileName);
-
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', form.getAttribute('action') || '/user-upload', true);
-            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-
-            if (csrfEl && csrfEl.value) {
-                xhr.setRequestHeader('X-CSRFToken', csrfEl.value);
-            }
-
-            if (xhr.upload) {
-                xhr.upload.onprogress = function(event) {
-                    if (event.lengthComputable && progressEl) {
-                        const percent = Math.min(90, Math.max(15, Math.round((event.loaded / event.total) * 90)));
-                        progressEl.style.width = percent + '%';
-                        if (percent > 60 && statusEl) {
-                            statusEl.textContent = 'Saving submission record...';
-                        }
+            // Fake progress timer (fetch doesn't expose upload progress)
+            let progressTimer = null;
+            let fakePercent = 15;
+            if (progressEl) {
+                progressTimer = setInterval(() => {
+                    fakePercent = Math.min(85, fakePercent + Math.random() * 8);
+                    progressEl.style.width = fakePercent + '%';
+                    if (fakePercent > 60 && statusEl) {
+                        statusEl.textContent = 'Saving submission record...';
                     }
-                };
+                }, 400);
             }
 
-            xhr.onload = function() {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    if (progressEl) progressEl.style.width = '100%';
-                    if (statusEl) statusEl.textContent = 'Submission complete!';
-                    setTimeout(() => {
-                        window.location.href = '/user-upload?success=1';
-                    }, 350);
-                } else {
-                    if (overlay) overlay.style.display = 'none';
-                    window.isNavigatingAway = false;
-                    submitBtn.classList.remove('loading');
-                    submitBtn.style.pointerEvents = '';
-                    submitBtn.disabled = false;
-                    let errorMsg = 'Upload failed. Please try again.';
-                    try {
-                        const data = JSON.parse(xhr.responseText);
-                        if (data && data.error) errorMsg = data.error;
-                    } catch (err) {}
-                    showUploadError(errorMsg);
-                }
-            };
-
-            xhr.onerror = async function() {
-                console.warn('XHR error encountered on mobile, attempting fetch fallback...');
-                try {
-                    const fetchRes = await fetch(form.getAttribute('action') || '/user-upload', {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                            ...(csrfEl && csrfEl.value ? { 'X-CSRFToken': csrfEl.value } : {})
-                        }
-                    });
-
-                    if (fetchRes.ok) {
-                        if (progressEl) progressEl.style.width = '100%';
-                        if (statusEl) statusEl.textContent = 'Submission complete!';
-                        setTimeout(() => {
-                            window.location.href = '/user-upload?success=1';
-                        }, 350);
-                        return;
-                    } else {
-                        let errText = 'Upload failed. Please try again.';
-                        try {
-                            const errData = await fetchRes.json();
-                            if (errData && errData.error) errText = errData.error;
-                        } catch (e) {}
-                        if (overlay) overlay.style.display = 'none';
-                        window.isNavigatingAway = false;
-                        submitBtn.classList.remove('loading');
-                        submitBtn.style.pointerEvents = '';
-                        submitBtn.disabled = false;
-                        showUploadError(errText);
-                        return;
-                    }
-                } catch (fallbackErr) {
-                    console.error('Fetch fallback network failure:', fallbackErr);
-                }
-
+            function stopProgress() {
+                if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+            }
+            function resetSubmitBtn() {
+                stopProgress();
                 if (overlay) overlay.style.display = 'none';
                 window.isNavigatingAway = false;
                 submitBtn.classList.remove('loading');
                 submitBtn.style.pointerEvents = '';
                 submitBtn.disabled = false;
-                showUploadError('Network connection error while uploading. Please check your internet connection and try again.');
-            };
+            }
 
-            xhr.send(formData);
+            try {
+                // Re-read the file as an ArrayBuffer and wrap as a plain Blob.
+                // This strips any Android content:// URI binding from the File object,
+                // which is what causes XHR to fail with net::ERR_FAILED on mobile.
+                const fileArrayBuffer = await finalFile.arrayBuffer();
+                const safeBlob = new Blob([fileArrayBuffer], { type: 'application/pdf' });
+                const fname = (finalFile && finalFile.name) ? finalFile.name : (selectedUploadFileName || 'document.pdf');
+
+                const fd = new FormData();
+                if (csrfEl && csrfEl.value) fd.append('csrf_token', csrfEl.value);
+                if (deptSel && deptSel.value) fd.append('department', deptSel.value);
+                if (courseTypeSel && courseTypeSel.value) fd.append('course_type', courseTypeSel.value);
+                if (semSel && semSel.value) fd.append('semester', semSel.value);
+                if (subjectSel && subjectSel.value) fd.append('subject_id', subjectSel.value);
+                const yrInput = document.getElementById('year');
+                fd.append('year', yrInput ? yrInput.value.trim() : '');
+                if (examTypeSel && examTypeSel.value) fd.append('exam_type', examTypeSel.value);
+                fd.append('file', safeBlob, fname);
+
+                const fetchRes = await fetch(uploadAction, {
+                    method: 'POST',
+                    body: fd,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        ...(csrfEl && csrfEl.value ? { 'X-CSRFToken': csrfEl.value } : {})
+                    }
+                });
+
+                stopProgress();
+
+                if (fetchRes.ok) {
+                    if (progressEl) progressEl.style.width = '100%';
+                    if (statusEl) statusEl.textContent = 'Submission complete!';
+                    setTimeout(() => { window.location.href = '/user-upload?success=1'; }, 350);
+                } else {
+                    let errorMsg = 'Upload failed. Please try again.';
+                    try {
+                        const errData = await fetchRes.json();
+                        if (errData && errData.error) errorMsg = errData.error;
+                    } catch (e) {}
+                    resetSubmitBtn();
+                    showUploadError(errorMsg);
+                }
+            } catch (err) {
+                console.error('Upload failed:', err);
+                resetSubmitBtn();
+                showUploadError('Upload failed. Please check your connection and try again.');
+            }
         });
     </script>
     <script>

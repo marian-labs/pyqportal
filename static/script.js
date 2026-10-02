@@ -893,98 +893,15 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
                 Uploading…`;
         }
 
-        // Build clean FormData without touching native DOM file handles
-        const formData = new FormData();
+        // ── Upload via fetch() ───────────────────────────────────────────────────────
+        // We use fetch() instead of XHR because on Android Chrome, XHR.send()
+        // with multipart FormData containing a File backed by a content:// URI
+        // triggers net::ERR_FAILED. fetch() with a plain Blob (from arrayBuffer)
+        // is reliable across all platforms including mobile.
         const csrfEl = uploadForm.querySelector('input[name="csrf_token"]');
-        if (csrfEl && csrfEl.value) {
-            formData.append('csrf_token', csrfEl.value);
-        }
-        if (deptEl && deptEl.value) formData.append('department', deptEl.value);
-        const ctEl = document.getElementById('uploadCourseType');
-        if (ctEl && ctEl.value) formData.append('course_type', ctEl.value);
-        if (semEl && semEl.value) formData.append('semester', semEl.value);
-        if (subEl && subEl.value) formData.append('subject_id', subEl.value);
-        if (yearEl && yearEl.value) formData.append('year', yearEl.value);
-        if (exEl && exEl.value) formData.append('exam_type', exEl.value);
-
-        const uploadName = (finalFile && finalFile.name) ? finalFile.name : 'paper.pdf';
-        formData.append('file', finalFile, uploadName);
-
         const uploadUrl = uploadForm.getAttribute('action') || '/upload';
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', uploadUrl, true);
-        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 
-        if (csrfEl && csrfEl.value) {
-            xhr.setRequestHeader('X-CSRFToken', csrfEl.value);
-        }
-
-        xhr.onload = function() {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                window.location.href = '/upload?success=1';
-            } else {
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.style.pointerEvents = '';
-                    submitBtn.innerHTML = originalBtnHtml;
-                }
-                let errorMsg = 'Upload failed. Please try again.';
-                try {
-                    const data = JSON.parse(xhr.responseText);
-                    if (data && data.error) errorMsg = data.error;
-                } catch (err) {}
-                const banner = document.getElementById('uploadErrorAlert');
-                const txt = document.getElementById('uploadErrorAlertText');
-                if (banner && txt) {
-                    txt.textContent = errorMsg;
-                    banner.style.display = 'block';
-                    banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                } else {
-                    alert(errorMsg);
-                }
-            }
-        };
-
-        xhr.onerror = async function() {
-            console.warn('XHR error on /upload, attempting fetch fallback...');
-            try {
-                const fetchRes = await fetch(uploadUrl, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        ...(csrfEl && csrfEl.value ? { 'X-CSRFToken': csrfEl.value } : {})
-                    }
-                });
-                if (fetchRes.ok) {
-                    window.location.href = '/upload?success=1';
-                    return;
-                } else {
-                    let errText = 'Upload failed. Please try again.';
-                    try {
-                        const errData = await fetchRes.json();
-                        if (errData && errData.error) errText = errData.error;
-                    } catch (e) {}
-                    if (submitBtn) {
-                        submitBtn.disabled = false;
-                        submitBtn.style.pointerEvents = '';
-                        submitBtn.innerHTML = originalBtnHtml;
-                    }
-                    const banner = document.getElementById('uploadErrorAlert');
-                    const txt = document.getElementById('uploadErrorAlertText');
-                    if (banner && txt) {
-                        txt.textContent = errText;
-                        banner.style.display = 'block';
-                        banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    } else {
-                        alert(errText);
-                    }
-                    return;
-                }
-            } catch (fallbackErr) {
-                console.error('Fetch fallback error:', fallbackErr);
-            }
-
+        function showUploadBanner(msg) {
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.style.pointerEvents = '';
@@ -993,15 +910,56 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
             const banner = document.getElementById('uploadErrorAlert');
             const txt = document.getElementById('uploadErrorAlertText');
             if (banner && txt) {
-                txt.textContent = 'Network connection error while uploading. Please check your connection and try again.';
+                txt.textContent = msg;
                 banner.style.display = 'block';
                 banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
             } else {
-                alert('Network connection error while uploading. Please check your connection and try again.');
+                alert(msg);
             }
-        };
+        }
 
-        xhr.send(formData);
+        try {
+            // Re-read the file as an ArrayBuffer and wrap as a plain Blob.
+            // This strips any Android content:// URI binding from the File object,
+            // which is what causes XHR to fail with net::ERR_FAILED on mobile.
+            const fileArrayBuffer = await finalFile.arrayBuffer();
+            const safeBlob = new Blob([fileArrayBuffer], { type: 'application/pdf' });
+            const uploadName = (finalFile && finalFile.name) ? finalFile.name : 'paper.pdf';
+
+            const fd = new FormData();
+            if (csrfEl && csrfEl.value) fd.append('csrf_token', csrfEl.value);
+            if (deptEl && deptEl.value) fd.append('department', deptEl.value);
+            const ctEl = document.getElementById('uploadCourseType');
+            if (ctEl && ctEl.value) fd.append('course_type', ctEl.value);
+            if (semEl && semEl.value) fd.append('semester', semEl.value);
+            if (subEl && subEl.value) fd.append('subject_id', subEl.value);
+            if (yearEl && yearEl.value) fd.append('year', yearEl.value);
+            if (exEl && exEl.value) fd.append('exam_type', exEl.value);
+            fd.append('file', safeBlob, uploadName);
+
+            const fetchRes = await fetch(uploadUrl, {
+                method: 'POST',
+                body: fd,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(csrfEl && csrfEl.value ? { 'X-CSRFToken': csrfEl.value } : {})
+                }
+            });
+
+            if (fetchRes.ok) {
+                window.location.href = '/upload?success=1';
+            } else {
+                let errorMsg = 'Upload failed. Please try again.';
+                try {
+                    const data = await fetchRes.json();
+                    if (data && data.error) errorMsg = data.error;
+                } catch (e) {}
+                showUploadBanner(errorMsg);
+            }
+        } catch (err) {
+            console.error('Upload failed:', err);
+            showUploadBanner('Upload failed. Please check your connection and try again.');
+        }
     });
 }
 
