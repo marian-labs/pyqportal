@@ -291,8 +291,8 @@
                                 <label class="form-label">
                                     Upload PDF File <span class="required">*</span>
                                 </label>
-                                <div class="file-upload-area" id="fileUploadArea">
-                                    <input type="file" id="uploadFile" name="file" accept=".pdf,application/pdf" style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;" />
+                                <label class="file-upload-area" id="fileUploadArea" for="uploadFile" style="display:block;">
+                                    <input type="file" id="uploadFile" name="file" accept=".pdf,application/pdf" style="display:none;" />
                                     <div class="file-upload-content">
                                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -318,7 +318,7 @@
                                             </svg>
                                         </button>
                                     </div>
-                                </div>
+                                </label>
                                 <span class="error-message" id="fileError"></span>
                             </div>
 
@@ -466,8 +466,8 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}?v=7"></script>
-    <script src="{{ url_for('static', filename='uploadjs.js') }}?v=7"></script>
+    <script src="{{ url_for('static', filename='script.js') }}?v=8"></script>
+    <script src="{{ url_for('static', filename='uploadjs.js') }}?v=8"></script>
     <script>
         /* ── Scroll reveal ── */
         const _revealObs = new IntersectionObserver((entries) => {

@@ -325,6 +325,7 @@
 
         /* ── DROPZONE ── */
         .up-dropzone {
+            display: block;
             border: 2px dashed #d1d5db;
             border-radius: 12px;
             background: #f9fafb;
@@ -1572,13 +1573,9 @@
                         <!-- File -->
                         <div class="up-group full">
                             <label class="up-label">PDF File</label>
-                            <!-- fileInput is intentionally placed OUTSIDE the overflow:hidden dropzone.
-                                 On mobile (Android/iOS), overflow:hidden clips the native file-picker
-                                 hit-target, preventing the OS file dialog from opening.
-                                 The dropzone click triggers fileInput.click() via JS instead. -->
-                            <input type="file" name="file" id="fileInput" accept=".pdf,application/pdf"
-                                style="position:fixed; top:-1000px; left:-1000px; opacity:0; width:1px; height:1px; pointer-events:none;" />
-                            <div class="up-dropzone" id="dropzone">
+                            <label class="up-dropzone" id="dropzone" for="fileInput">
+                                <input type="file" name="file" id="fileInput" accept=".pdf,application/pdf"
+                                    style="display:none;" />
                                 <svg class="up-dz-icon" width="32" height="32" viewBox="0 0 24 24" fill="none"
                                     stroke="currentColor" stroke-width="1.5" id="dzIcon">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1596,7 +1593,7 @@
                                     <span id="dzFilenameText"></span>
                                     <button type="button" class="up-dz-remove" id="dzRemove" title="Remove">✕</button>
                                 </div>
-                            </div>
+                            </label>
 
                             <div class="scan-or-wrapper">
                                 <div class="scan-or-line"></div>
@@ -1924,8 +1921,8 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}?v=7"></script>
-    <script src="{{ url_for('static', filename='indexjs.js') }}?v=7"></script>
+    <script src="{{ url_for('static', filename='script.js') }}?v=8"></script>
+    <script src="{{ url_for('static', filename='indexjs.js') }}?v=8"></script>
     <script>
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');
@@ -2345,9 +2342,8 @@
             try {
                 await readFileToMemory(file);
             } catch (err) {
-                console.error('File read error on selection:', err);
-                showUploadError('Could not read the selected file (' + (err.message || 'Permission denied') + '). Please ensure it is stored locally on your device or pick from Downloads.');
-                clearFile();
+                console.warn('In-memory pre-buffer skipped (will stream from file handle):', err);
+                // Do NOT call clearFile()! Keep the file selected and visible in UI.
             }
         }
 
@@ -2368,20 +2364,33 @@
             triggerDuplicateCheck();
         }
 
-        fileInput.addEventListener('change', () => { if (fileInput.files.length) setFile(fileInput.files[0]); });
-        dzRemove.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (confirm('Are you sure you want to remove this PDF file?')) {
-                clearFile();
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files && fileInput.files.length) {
+                setFile(fileInput.files[0]);
             }
         });
 
-        // Trigger file picker when dropzone is tapped
+        // Reset fileInput value on click so selecting the same file fires 'change' every time
+        fileInput.addEventListener('click', () => {
+            fileInput.value = '';
+        });
+
+        dzRemove.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            clearFile();
+        });
+
+        // If a file is already selected, prevent clicking the dropzone from re-triggering file dialog
         dropzone.addEventListener('click', (e) => {
-            if (e.target === dzRemove || dzRemove.contains(e.target)) return;
-            if (dropzone.classList.contains('has-file')) return;
-            fileInput.click();
+            if (e.target === dzRemove || dzRemove.contains(e.target)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            if (dropzone.classList.contains('has-file')) {
+                e.preventDefault();
+            }
         });
 
         dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
@@ -2419,32 +2428,22 @@
                 return;
             }
 
-            // Ensure in-memory file read has finished
+            // If reading is still in progress, wait for it
             if (isReadingFile && fileReadPromise) {
                 try {
                     await fileReadPromise;
                 } catch (err) {
-                    showUploadError('File is still loading or could not be read: ' + (err.message || 'Error') + '. Please select the file again.');
-                    return;
+                    console.warn('Submit wait error:', err);
                 }
             }
 
-            if (!inMemoryPdfBlob) {
-                const fallbackFile = fileInput.files && fileInput.files[0];
-                if (fallbackFile) {
-                    try {
-                        await readFileToMemory(fallbackFile);
-                    } catch (err) {
-                        showUploadError('Could not read PDF file: ' + (err.message || 'Error') + '. Please try selecting again.');
-                        return;
-                    }
-                }
-            }
-
-            if (!inMemoryPdfBlob) {
+            const fileToSend = inMemoryPdfBlob || (fileInput.files && fileInput.files[0]);
+            if (!fileToSend) {
                 showUploadError('Please select a PDF file.');
                 return;
             }
+
+            const uploadDocName = inMemoryPdfName || (fileToSend && fileToSend.name) || 'document.pdf';
 
             window.isNavigatingAway = true;
             submitBtn.classList.add('loading');
@@ -2497,8 +2496,7 @@
                 if (subjectSel && subjectSel.value) fd.append('subject_id', subjectSel.value);
                 const yrInput = document.getElementById('year');
                 fd.append('year', yrInput ? yrInput.value.trim() : '');
-                if (examTypeSel && examTypeSel.value) fd.append('exam_type', examTypeSel.value);
-                fd.append('file', inMemoryPdfBlob, inMemoryPdfName || 'document.pdf');
+                fd.append('file', fileToSend, uploadDocName);
 
                 const fetchRes = await fetch(uploadAction, {
                     method: 'POST',

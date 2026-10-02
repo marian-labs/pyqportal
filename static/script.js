@@ -711,7 +711,16 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
 
 
     if (fileUploadArea) {
-        fileUploadArea.addEventListener('click', () => uploadFile.click());
+        fileUploadArea.addEventListener('click', (e) => {
+            if (e.target === removeFile || removeFile.contains(e.target)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            if (fileSelected && fileSelected.style.display !== 'none') {
+                e.preventDefault();
+            }
+        });
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             fileUploadArea.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }, false);
@@ -770,8 +779,11 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
     }
 
     if (uploadFile) {
+        uploadFile.addEventListener('click', () => {
+            uploadFile.value = '';
+        });
         uploadFile.addEventListener('change', (e) => {
-            if (e.target.files[0]) handleFileSelect(e.target.files[0]);
+            if (e.target.files && e.target.files.length) handleFileSelect(e.target.files[0]);
         });
     }
 
@@ -798,9 +810,8 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
         try {
             await readFileToMemory(file);
         } catch (err) {
-            console.error('File read error on admin upload:', err);
-            showError('fileError', 'Could not read selected file (' + (err.message || 'Permission denied') + '). Please try selecting it again.');
-            clearAdminFile();
+            console.warn('In-memory pre-buffer skipped (will stream from file handle):', err);
+            // Do NOT call clearAdminFile()! Keep file selected and visible in UI.
         }
     }
 
@@ -817,6 +828,7 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
 
     if (removeFile) {
         removeFile.addEventListener('click', (e) => {
+            e.preventDefault();
             e.stopPropagation();
             clearAdminFile();
         });
@@ -861,32 +873,22 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
 
         if (!isValid) return;
 
-        // Ensure in-memory file read has finished
+        // If reading is still in progress, wait for it
         if (isReadingFile && fileReadPromise) {
             try {
                 await fileReadPromise;
             } catch (err) {
-                showError('fileError', 'File is still loading or could not be read: ' + (err.message || 'Error'));
-                return;
+                console.warn('Submit wait error:', err);
             }
         }
 
-        if (!inMemoryPdfBlob) {
-            const fallbackFile = uploadFile && uploadFile.files && uploadFile.files[0];
-            if (fallbackFile) {
-                try {
-                    await readFileToMemory(fallbackFile);
-                } catch (err) {
-                    showError('fileError', 'Could not read PDF file: ' + (err.message || 'Error'));
-                    return;
-                }
-            }
-        }
-
-        if (!inMemoryPdfBlob) {
+        const fileToSend = inMemoryPdfBlob || (uploadFile.files && uploadFile.files[0]);
+        if (!fileToSend) {
             showError('fileError', 'Please select a PDF file');
             return;
         }
+
+        const uploadDocName = inMemoryPdfName || (fileToSend && fileToSend.name) || 'paper.pdf';
 
         const submitBtn = uploadForm.querySelector('button[type="submit"]');
         const originalBtnHtml = submitBtn ? submitBtn.innerHTML : 'Upload Paper';
@@ -932,7 +934,7 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
             if (subEl && subEl.value) fd.append('subject_id', subEl.value);
             if (yearEl && yearEl.value) fd.append('year', yearEl.value);
             if (exEl && exEl.value) fd.append('exam_type', exEl.value);
-            fd.append('file', inMemoryPdfBlob, inMemoryPdfName || 'paper.pdf');
+            fd.append('file', fileToSend, uploadDocName);
 
             const fetchRes = await fetch(uploadUrl, {
                 method: 'POST',
