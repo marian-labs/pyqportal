@@ -1573,9 +1573,9 @@
                         <!-- File -->
                         <div class="up-group full">
                             <label class="up-label">PDF File</label>
+                            <input type="file" name="file" id="fileInput" accept=".pdf,application/pdf"
+                                style="display:none;" />
                             <label class="up-dropzone" id="dropzone" for="fileInput">
-                                <input type="file" name="file" id="fileInput" accept=".pdf,application/pdf"
-                                    style="display:none;" />
                                 <svg class="up-dz-icon" width="32" height="32" viewBox="0 0 24 24" fill="none"
                                     stroke="currentColor" stroke-width="1.5" id="dzIcon">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -2275,43 +2275,12 @@
             if (el) el.style.display = 'none';
         }
 
-        let inMemoryPdfBlob = null;
-        let inMemoryPdfName = '';
-        let isReadingFile = false;
-        let fileReadPromise = null;
-
-        function readFileToMemory(file) {
-            if (!file) return Promise.resolve(null);
-            isReadingFile = true;
-            inMemoryPdfName = file.name || 'document.pdf';
-
-            fileReadPromise = new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        inMemoryPdfBlob = new Blob([e.target.result], { type: 'application/pdf' });
-                        isReadingFile = false;
-                        resolve(inMemoryPdfBlob);
-                    } catch (err) {
-                        isReadingFile = false;
-                        reject(err);
-                    }
-                };
-                reader.onerror = function() {
-                    isReadingFile = false;
-                    reject(new Error(reader.error ? reader.error.message : 'Could not read file from device storage'));
-                };
-                reader.readAsArrayBuffer(file);
-            });
-
-            return fileReadPromise;
-        }
-
         /* ── File drag & drop / selection ── */
-        async function setFile(file) {
+        function setFile(file) {
             if (!file) return;
             const fileNameLower = (file.name || '').toLowerCase();
-            if (file.type !== 'application/pdf' && !fileNameLower.endsWith('.pdf')) {
+            const isPdf = (file.type && file.type.toLowerCase().includes('pdf')) || fileNameLower.endsWith('.pdf');
+            if (!isPdf) {
                 showUploadError('Only PDF files are allowed.');
                 clearFile();
                 return;
@@ -2331,27 +2300,9 @@
             dzHint.style.display = 'none';
             dzRemove.style.display = 'inline-flex';
             triggerDuplicateCheck();
-
-            // If file is already a memory Blob from camera scanner
-            if (file._isInMemory || (file instanceof Blob && !(file instanceof File))) {
-                inMemoryPdfBlob = file;
-                inMemoryPdfName = file.name || 'scanned_paper.pdf';
-                return;
-            }
-
-            try {
-                await readFileToMemory(file);
-            } catch (err) {
-                console.warn('In-memory pre-buffer skipped (will stream from file handle):', err);
-                // Do NOT call clearFile()! Keep the file selected and visible in UI.
-            }
         }
 
         function clearFile() {
-            inMemoryPdfBlob = null;
-            inMemoryPdfName = '';
-            fileReadPromise = null;
-            isReadingFile = false;
             try { fileInput.value = ''; } catch(e) {}
             dzText.textContent = '';
             dzFilename.classList.remove('visible');
@@ -2370,18 +2321,13 @@
             }
         });
 
-        // Reset fileInput value on click so selecting the same file fires 'change' every time
-        fileInput.addEventListener('click', () => {
-            fileInput.value = '';
-        });
-
         dzRemove.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             clearFile();
         });
 
-        // If a file is already selected, prevent clicking the dropzone from re-triggering file dialog
+        // Dropzone click handling: clear value on open so same file fires change, prevent re-triggering if file already selected
         dropzone.addEventListener('click', (e) => {
             if (e.target === dzRemove || dzRemove.contains(e.target)) {
                 e.preventDefault();
@@ -2390,7 +2336,9 @@
             }
             if (dropzone.classList.contains('has-file')) {
                 e.preventDefault();
+                return;
             }
+            try { fileInput.value = ''; } catch(e) {}
         });
 
         dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
@@ -2409,46 +2357,35 @@
             }
         });
 
-        /* ── Form submit validation & AJAX upload ── */
-        form && form.addEventListener('submit', async function(e) {
-            e.preventDefault();
+        /* ── Form submit validation (Native browser submission) ── */
+        form && form.addEventListener('submit', function(e) {
             hideUploadError();
 
-            if (!deptSel.value) { showUploadError('Please select a department.'); return; }
+            if (!deptSel.value) { e.preventDefault(); showUploadError('Please select a department.'); return false; }
             if (deptSel.value === 'General' && (!courseTypeSel || !courseTypeSel.value)) {
-                showUploadError('Please select a course type (AEC, MDC, or VAC).'); return;
+                e.preventDefault(); showUploadError('Please select a course type (AEC, MDC, or VAC).'); return false;
             }
-            if (!semSel.value) { showUploadError('Please select a semester.'); return; }
-            if (!subjectSel.value) { showUploadError('Please select a subject.'); return; }
+            if (!semSel.value) { e.preventDefault(); showUploadError('Please select a semester.'); return false; }
+            if (!subjectSel.value) { e.preventDefault(); showUploadError('Please select a subject.'); return false; }
             const y = parseInt(document.getElementById('year').value);
-            if (!y || y < 2000 || y > 2100) { showUploadError('Please enter a valid year (2000–2100).'); return; }
-            if (!examTypeSel.value) { showUploadError('Please select an exam type.'); return; }
+            if (!y || y < 2000 || y > 2100) { e.preventDefault(); showUploadError('Please enter a valid year (2000–2100).'); return false; }
+            if (!examTypeSel.value) { e.preventDefault(); showUploadError('Please select an exam type.'); return false; }
             if (isDuplicatePaper) {
+                e.preventDefault();
                 showUploadError('Already this paper is uploaded. Please choose a different year or exam type.');
-                return;
+                return false;
             }
 
-            // If reading is still in progress, wait for it
-            if (isReadingFile && fileReadPromise) {
-                try {
-                    await fileReadPromise;
-                } catch (err) {
-                    console.warn('Submit wait error:', err);
-                }
-            }
-
-            const fileToSend = inMemoryPdfBlob || (fileInput.files && fileInput.files[0]);
-            if (!fileToSend) {
+            if (!fileInput.files || !fileInput.files[0]) {
+                e.preventDefault();
                 showUploadError('Please select a PDF file.');
-                return;
+                return false;
             }
 
-            const uploadDocName = inMemoryPdfName || (fileToSend && fileToSend.name) || 'document.pdf';
-
+            // Validations passed! Show loading UI and allow native browser form submission
             window.isNavigatingAway = true;
             submitBtn.classList.add('loading');
             submitBtn.style.pointerEvents = 'none';
-            submitBtn.disabled = true;
 
             const overlay = document.getElementById('uploadLoadingOverlay');
             const statusEl = document.getElementById('uploadLoadingStatus');
@@ -2456,81 +2393,19 @@
 
             if (overlay) {
                 overlay.style.display = 'flex';
-                if (progressEl) progressEl.style.width = '15%';
-                if (statusEl) statusEl.textContent = 'Uploading paper...';
-            }
+                let progress = 20;
+                if (progressEl) progressEl.style.width = progress + '%';
 
-            const csrfEl = form.querySelector('input[name="csrf_token"]');
-            const uploadAction = form.getAttribute('action') || '/user-upload';
-
-            let progressTimer = null;
-            let fakePercent = 15;
-            if (progressEl) {
-                progressTimer = setInterval(() => {
-                    fakePercent = Math.min(85, fakePercent + Math.random() * 8);
-                    progressEl.style.width = fakePercent + '%';
-                    if (fakePercent > 60 && statusEl) {
-                        statusEl.textContent = 'Saving submission record...';
+                setInterval(() => {
+                    progress = Math.min(92, progress + Math.floor(Math.random() * 10) + 5);
+                    if (progressEl) progressEl.style.width = progress + '%';
+                    if (progress > 50 && statusEl) {
+                        statusEl.textContent = 'Uploading paper & saving submission record...';
                     }
-                }, 400);
+                }, 300);
             }
 
-            function stopProgress() {
-                if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
-            }
-            function resetSubmitBtn() {
-                stopProgress();
-                if (overlay) overlay.style.display = 'none';
-                window.isNavigatingAway = false;
-                submitBtn.classList.remove('loading');
-                submitBtn.style.pointerEvents = '';
-                submitBtn.disabled = false;
-            }
-
-            try {
-                const fd = new FormData();
-                if (csrfEl && csrfEl.value) fd.append('csrf_token', csrfEl.value);
-                if (deptSel && deptSel.value) fd.append('department', deptSel.value);
-                if (courseTypeSel && courseTypeSel.value) fd.append('course_type', courseTypeSel.value);
-                if (semSel && semSel.value) fd.append('semester', semSel.value);
-                if (subjectSel && subjectSel.value) fd.append('subject_id', subjectSel.value);
-                const yrInput = document.getElementById('year');
-                fd.append('year', yrInput ? yrInput.value.trim() : '');
-                fd.append('file', fileToSend, uploadDocName);
-
-                const fetchRes = await fetch(uploadAction, {
-                    method: 'POST',
-                    body: fd,
-                    credentials: 'same-origin',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        ...(csrfEl && csrfEl.value ? { 'X-CSRFToken': csrfEl.value } : {})
-                    }
-                });
-
-                stopProgress();
-
-                if (fetchRes.ok) {
-                    if (progressEl) progressEl.style.width = '100%';
-                    if (statusEl) statusEl.textContent = 'Submission complete!';
-                    setTimeout(() => { window.location.href = '/user-upload?success=1'; }, 350);
-                } else {
-                    let errorMsg = 'Upload failed. Please try again.';
-                    try {
-                        const errData = await fetchRes.json();
-                        if (errData && errData.error) errorMsg = errData.error;
-                    } catch (e) {
-                        errorMsg = 'Server error (' + fetchRes.status + '). Please try again.';
-                    }
-                    resetSubmitBtn();
-                    showUploadError(errorMsg);
-                }
-            } catch (err) {
-                console.error('Upload error:', err);
-                stopProgress();
-                resetSubmitBtn();
-                showUploadError('Upload failed: ' + (err.message || 'Network error') + '. Please try again.');
-            }
+            return true;
         });
     </script>
     <script>

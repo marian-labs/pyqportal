@@ -719,7 +719,9 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
             }
             if (fileSelected && fileSelected.style.display !== 'none') {
                 e.preventDefault();
+                return;
             }
+            try { uploadFile.value = ''; } catch(e) {}
         });
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -742,54 +744,24 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
 
         fileUploadArea.addEventListener('drop', (e) => {
             const files = e.dataTransfer.files;
-            if (files.length > 0) { uploadFile.files = files; handleFileSelect(files[0]); }
+            if (files && files.length > 0) {
+                try { uploadFile.files = files; } catch(err) {}
+                handleFileSelect(files[0]);
+            }
         }, false);
     }
 
-    let inMemoryPdfBlob = null;
-    let inMemoryPdfName = '';
-    let isReadingFile = false;
-    let fileReadPromise = null;
-
-    function readFileToMemory(file) {
-        if (!file) return Promise.resolve(null);
-        isReadingFile = true;
-        inMemoryPdfName = file.name || 'paper.pdf';
-
-        fileReadPromise = new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    inMemoryPdfBlob = new Blob([e.target.result], { type: 'application/pdf' });
-                    isReadingFile = false;
-                    resolve(inMemoryPdfBlob);
-                } catch (err) {
-                    isReadingFile = false;
-                    reject(err);
-                }
-            };
-            reader.onerror = function() {
-                isReadingFile = false;
-                reject(new Error(reader.error ? reader.error.message : 'Could not read file from device storage'));
-            };
-            reader.readAsArrayBuffer(file);
-        });
-
-        return fileReadPromise;
-    }
-
     if (uploadFile) {
-        uploadFile.addEventListener('click', () => {
-            uploadFile.value = '';
-        });
         uploadFile.addEventListener('change', (e) => {
             if (e.target.files && e.target.files.length) handleFileSelect(e.target.files[0]);
         });
     }
 
-    async function handleFileSelect(file) {
+    function handleFileSelect(file) {
+        if (!file) return;
         const fileNameLower = (file.name || '').toLowerCase();
-        if (file.type !== 'application/pdf' && !fileNameLower.endsWith('.pdf')) {
+        const isPdf = (file.type && file.type.toLowerCase().includes('pdf')) || fileNameLower.endsWith('.pdf');
+        if (!isPdf) {
             showError('fileError', 'Only PDF files are allowed');
             clearAdminFile();
             return;
@@ -806,24 +778,14 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
         if (uploadContent) uploadContent.style.display = 'none';
         if (fileSelected) fileSelected.style.display = 'flex';
         hideError('fileError');
-
-        try {
-            await readFileToMemory(file);
-        } catch (err) {
-            console.warn('In-memory pre-buffer skipped (will stream from file handle):', err);
-            // Do NOT call clearAdminFile()! Keep file selected and visible in UI.
-        }
     }
 
     function clearAdminFile() {
-        inMemoryPdfBlob = null;
-        inMemoryPdfName = '';
-        fileReadPromise = null;
-        isReadingFile = false;
         try { uploadFile.value = ''; } catch (e) {}
         const uploadContent = document.querySelector('.file-upload-content');
         if (uploadContent) uploadContent.style.display = 'block';
         if (fileSelected) fileSelected.style.display = 'none';
+        hideError('fileError');
     }
 
     if (removeFile) {
@@ -852,8 +814,7 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
         if (el) el.style.display = 'none';
     }
 
-    uploadForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    uploadForm.addEventListener('submit', (e) => {
         document.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
         const errBanner = document.getElementById('uploadErrorAlert');
         if (errBanner) errBanner.style.display = 'none';
@@ -864,36 +825,37 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
         const semEl  = document.getElementById('uploadSemester');
         const yearEl = document.getElementById('uploadYear');
         const exEl   = document.getElementById('uploadExamType');
+        const ctEl   = document.getElementById('uploadCourseType');
 
         if (deptEl && !deptEl.value)  { showError('departmentError', 'Please select a department'); isValid = false; }
+        if (deptEl && deptEl.value === 'General' && ctEl && !ctEl.value) {
+            showError('courseTypeError', 'Please select a course type'); isValid = false;
+        }
+        if (semEl  && !semEl.value)   { showError('semesterError',   'Please select a semester');   isValid = false; }
         if (subEl  && !subEl.value)   { showError('subjectError',    'Please select a subject');    isValid = false; }
         if (yearEl && !yearEl.value)  { showError('yearError',       'Please select a year');       isValid = false; }
-        if (semEl  && !semEl.value)   { showError('semesterError',   'Please select a semester');   isValid = false; }
         if (exEl   && !exEl.value)    { showError('examTypeError',   'Please select an exam type'); isValid = false; }
 
-        if (!isValid) return;
-
-        // If reading is still in progress, wait for it
-        if (isReadingFile && fileReadPromise) {
-            try {
-                await fileReadPromise;
-            } catch (err) {
-                console.warn('Submit wait error:', err);
-            }
+        const dupBanner = document.getElementById('duplicateAlert');
+        if (dupBanner && dupBanner.style.display !== 'none') {
+            isValid = false;
         }
 
-        const fileToSend = inMemoryPdfBlob || (uploadFile.files && uploadFile.files[0]);
+        const fileToSend = uploadFile && uploadFile.files && uploadFile.files[0];
         if (!fileToSend) {
             showError('fileError', 'Please select a PDF file');
-            return;
+            isValid = false;
         }
 
-        const uploadDocName = inMemoryPdfName || (fileToSend && fileToSend.name) || 'paper.pdf';
+        if (!isValid) {
+            e.preventDefault();
+            return false;
+        }
 
+        // Native form submission will proceed.
+        // Update submit button visual state without setting disabled = true synchronously (prevents mobile Chrome net::ERR_FAILED)
         const submitBtn = uploadForm.querySelector('button[type="submit"]');
-        const originalBtnHtml = submitBtn ? submitBtn.innerHTML : 'Upload Paper';
         if (submitBtn) {
-            submitBtn.disabled = true;
             submitBtn.style.pointerEvents = 'none';
             submitBtn.innerHTML = `
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -904,64 +866,7 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
                 Uploading…`;
         }
 
-        const csrfEl = uploadForm.querySelector('input[name="csrf_token"]');
-        const uploadUrl = uploadForm.getAttribute('action') || '/upload';
-
-        function showUploadBanner(msg) {
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.style.pointerEvents = '';
-                submitBtn.innerHTML = originalBtnHtml;
-            }
-            const banner = document.getElementById('uploadErrorAlert');
-            const txt = document.getElementById('uploadErrorAlertText');
-            if (banner && txt) {
-                txt.textContent = msg;
-                banner.style.display = 'block';
-                banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            } else {
-                alert(msg);
-            }
-        }
-
-        try {
-            const fd = new FormData();
-            if (csrfEl && csrfEl.value) fd.append('csrf_token', csrfEl.value);
-            if (deptEl && deptEl.value) fd.append('department', deptEl.value);
-            const ctEl = document.getElementById('uploadCourseType');
-            if (ctEl && ctEl.value) fd.append('course_type', ctEl.value);
-            if (semEl && semEl.value) fd.append('semester', semEl.value);
-            if (subEl && subEl.value) fd.append('subject_id', subEl.value);
-            if (yearEl && yearEl.value) fd.append('year', yearEl.value);
-            if (exEl && exEl.value) fd.append('exam_type', exEl.value);
-            fd.append('file', fileToSend, uploadDocName);
-
-            const fetchRes = await fetch(uploadUrl, {
-                method: 'POST',
-                body: fd,
-                credentials: 'same-origin',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    ...(csrfEl && csrfEl.value ? { 'X-CSRFToken': csrfEl.value } : {})
-                }
-            });
-
-            if (fetchRes.ok) {
-                window.location.href = '/upload?success=1';
-            } else {
-                let errorMsg = 'Upload failed. Please try again.';
-                try {
-                    const data = await fetchRes.json();
-                    if (data && data.error) errorMsg = data.error;
-                } catch (e) {
-                    errorMsg = 'Server error (' + fetchRes.status + '). Please try again.';
-                }
-                showUploadBanner(errorMsg);
-            }
-        } catch (err) {
-            console.error('Upload failed:', err);
-            showUploadBanner('Upload failed: ' + (err.message || 'Network error') + '. Please try again.');
-        }
+        return true;
     });
 }
 
