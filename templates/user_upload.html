@@ -15,8 +15,8 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=4">
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <style>
         html, body {
@@ -1635,6 +1635,16 @@
                         <div id="duplicateAlertText">Already this paper is uploaded.</div>
                     </div>
 
+                    <!-- In-Page Upload Error Alert Banner -->
+                    <div id="uploadErrorAlert" class="up-alert up-alert-error" style="display:none; margin: 0 0 1.25rem; font-weight:600; align-items:center;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;flex-shrink:0;">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <div id="uploadErrorAlertText">Upload failed. Please try again.</div>
+                    </div>
+
                     <button type="submit" class="up-btn" id="submitBtn">
                         <div class="up-spinner"></div>
                         <span class="up-btn-text">Submit for Review</span>
@@ -2259,24 +2269,70 @@
             }, true);
         }
 
+        let selectedUploadFile = null;
+        let fileBufferingPromise = null;
+
+        function showUploadError(msg) {
+            const el = document.getElementById('uploadErrorAlert');
+            const txt = document.getElementById('uploadErrorAlertText');
+            if (el && txt) {
+                txt.textContent = msg;
+                el.style.display = 'flex';
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            try {
+                alert(msg);
+            } catch (e) {}
+        }
+
+        function hideUploadError() {
+            const el = document.getElementById('uploadErrorAlert');
+            if (el) el.style.display = 'none';
+        }
+
+        async function bufferFileToMemory(file) {
+            if (!file) return null;
+            try {
+                const buffer = await file.arrayBuffer();
+                return new File([buffer], file.name || 'document.pdf', {
+                    type: 'application/pdf',
+                    lastModified: file.lastModified || Date.now()
+                });
+            } catch (err) {
+                console.warn('Memory buffering fallback:', err);
+                return file;
+            }
+        }
+
         /* ── File drag & drop ── */
-        function setFile(file) {
+        async function setFile(file) {
             if (!file) return;
             if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-                alert('Only PDF files are allowed.'); fileInput.value = ''; return;
+                showUploadError('Only PDF files are allowed.'); fileInput.value = ''; return;
             }
             if (file.size > 5 * 1024 * 1024) {
-                alert('File too large. Maximum PDF size is 5 MB.'); fileInput.value = ''; return;
+                showUploadError('File too large. Maximum PDF size is 5 MB.'); fileInput.value = ''; return;
             }
+            hideUploadError();
+            selectedUploadFile = null;
+            fileBufferingPromise = bufferFileToMemory(file).then(buffered => {
+                selectedUploadFile = buffered;
+                return buffered;
+            });
+
             dzText.textContent = file.name;
             dzFilename.classList.add('visible');
             dropzone.classList.add('has-file');
             dzIcon.style.display = 'none';
             dzTitle.style.display = 'none';
             dzHint.style.display = 'none';
+            dzRemove.style.display = 'inline-flex';
+            triggerDuplicateCheck();
         }
 
         function clearFile() {
+            selectedUploadFile = null;
+            fileBufferingPromise = null;
             fileInput.value = '';
             dzText.textContent = '';
             dzFilename.classList.remove('visible');
@@ -2284,6 +2340,9 @@
             dzIcon.style.display = '';
             dzTitle.style.display = '';
             dzHint.style.display = '';
+            dzRemove.style.display = 'none';
+            hideUploadError();
+            triggerDuplicateCheck();
         }
 
         fileInput.addEventListener('change', () => { if (fileInput.files.length) setFile(fileInput.files[0]); });
@@ -2302,30 +2361,48 @@
             dropzone.classList.remove('drag-over');
             const file = e.dataTransfer.files[0];
             if (file) {
-                const dt = new DataTransfer();
-                dt.items.add(file);
-                fileInput.files = dt.files;
+                try {
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    fileInput.files = dt.files;
+                } catch (err) {}
                 setFile(file);
             }
         });
 
         /* ── Form submit validation & AJAX upload ── */
-        form && form.addEventListener('submit', function(e) {
+        form && form.addEventListener('submit', async function(e) {
             e.preventDefault();
-            if (!deptSel.value) { alert('Please select a department.'); return; }
+            hideUploadError();
+
+            if (!deptSel.value) { showUploadError('Please select a department.'); return; }
             if (deptSel.value === 'General' && (!courseTypeSel || !courseTypeSel.value)) {
-                alert('Please select a course type (AEC, MDC, or VAC).'); return;
+                showUploadError('Please select a course type (AEC, MDC, or VAC).'); return;
             }
-            if (!semSel.value) { alert('Please select a semester.'); return; }
-            if (!subjectSel.value) { alert('Please select a subject.'); return; }
+            if (!semSel.value) { showUploadError('Please select a semester.'); return; }
+            if (!subjectSel.value) { showUploadError('Please select a subject.'); return; }
             const y = parseInt(document.getElementById('year').value);
-            if (!y || y < 2000 || y > 2100) { alert('Please enter a valid year (2000–2100).'); return; }
-            if (!examTypeSel.value) { alert('Please select an exam type.'); return; }
+            if (!y || y < 2000 || y > 2100) { showUploadError('Please enter a valid year (2000–2100).'); return; }
+            if (!examTypeSel.value) { showUploadError('Please select an exam type.'); return; }
             if (isDuplicatePaper) {
-                alert('Already this paper is uploaded. Please choose a different year or exam type.');
+                showUploadError('Already this paper is uploaded. Please choose a different year or exam type.');
                 return;
             }
-            if (!fileInput.files || !fileInput.files[0]) { alert('Please select a PDF file.'); return; }
+
+            if (fileBufferingPromise) {
+                try {
+                    await fileBufferingPromise;
+                } catch (e) {}
+            }
+
+            let finalFile = selectedUploadFile || (fileInput.files && fileInput.files[0]);
+            if (!finalFile) { showUploadError('Please select a PDF file.'); return; }
+
+            // Ensure file is loaded into RAM to avoid Android content:// stream invalidation
+            if (!selectedUploadFile) {
+                finalFile = await bufferFileToMemory(finalFile);
+                selectedUploadFile = finalFile;
+            }
 
             window.isNavigatingAway = true;
             submitBtn.classList.add('loading');
@@ -2343,9 +2420,16 @@
             }
 
             const formData = new FormData(form);
+            formData.set('file', finalFile, finalFile.name);
+
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', form.getAttribute('action') || '/user-upload', true);
+            xhr.open('POST', '/user-upload', true);
             xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+            const csrfEl = form.querySelector('input[name="csrf_token"]');
+            if (csrfEl && csrfEl.value) {
+                xhr.setRequestHeader('X-CSRFToken', csrfEl.value);
+            }
 
             if (xhr.upload) {
                 xhr.upload.onprogress = function(event) {
@@ -2377,7 +2461,7 @@
                         const data = JSON.parse(xhr.responseText);
                         if (data && data.error) errorMsg = data.error;
                     } catch (err) {}
-                    alert(errorMsg);
+                    showUploadError(errorMsg);
                 }
             };
 
@@ -2387,7 +2471,7 @@
                 submitBtn.classList.remove('loading');
                 submitBtn.style.pointerEvents = '';
                 submitBtn.disabled = false;
-                alert('Network connection error while uploading. Please check your internet connection and try again.');
+                showUploadError('Network connection error while uploading. Please check your internet connection and try again.');
             };
 
             xhr.send(formData);
@@ -2807,9 +2891,13 @@
 
                     const scannedFile = new File([pdfBlob], scannedFileName, { type: 'application/pdf', lastModified: Date.now() });
 
-                    const dt = new DataTransfer();
-                    dt.items.add(scannedFile);
-                    fileInput.files = dt.files;
+                    try {
+                        const dt = new DataTransfer();
+                        dt.items.add(scannedFile);
+                        fileInput.files = dt.files;
+                    } catch (e) {
+                        console.warn('DataTransfer fallback:', e);
+                    }
                     setFile(scannedFile);
 
                     closeScanModal();
