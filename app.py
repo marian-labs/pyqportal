@@ -768,6 +768,20 @@ def api_check_paper_duplicate():
 def user_upload():
     departments_list = get_departments(active_only=True)
     depts_dict = get_departments_dict(departments_list)
+
+    is_ajax = (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or "application/json" in request.headers.get("Accept", "")
+    )
+
+    def render_result(error=None, success=False):
+        if is_ajax:
+            if error:
+                return jsonify({"error": error}), 400
+            return jsonify({"success": True}), 200
+        return render_template("user_upload.html", error=error, success=success,
+                               subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+
     if request.method == "POST":
         subject_raw = request.form.get("subject_id", "").strip()
         year = request.form.get("year", "").strip()
@@ -776,22 +790,16 @@ def user_upload():
 
         # --- Validate ---
         if not subject_raw or not year or not exam_type or not file or not file.filename:
-            return render_template("user_upload.html",
-                                   error="All fields are required.",
-                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            return render_result(error="All fields are required.")
         if not allowed_file(file.filename):
-            return render_template("user_upload.html",
-                                   error="Only PDF files allowed.",
-                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            return render_result(error="Only PDF files allowed.")
         try:
             subject_id = int(subject_raw)
             year_int = int(year)
             if year_int < 2000 or year_int > 2100:
                 raise ValueError
         except ValueError:
-            return render_template("user_upload.html",
-                                   error="Invalid subject or year.",
-                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            return render_result(error="Invalid subject or year.")
 
         # Validate subject semester and course_type rules
         conn_v = get_db()
@@ -803,18 +811,12 @@ def user_upload():
             )
             s_row = cur_v.fetchone()
             if not s_row:
-                return render_template("user_upload.html",
-                                       error="Subject not found.",
-                                       subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="Subject not found.")
             subj_sem, subj_ctype = s_row
             if subj_ctype in ('AEC', 'MDC') and subj_sem not in (1, 2):
-                return render_template("user_upload.html",
-                                       error="AEC and MDC subjects are only allowed for Semester 1 and 2.",
-                                       subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="AEC and MDC subjects are only allowed for Semester 1 and 2.")
             if subj_ctype == 'VAC' and subj_sem not in (3, 4):
-                return render_template("user_upload.html",
-                                       error="VAC subjects are only allowed for Semester 3 and 4.",
-                                       subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="VAC subjects are only allowed for Semester 3 and 4.")
         finally:
             cur_v.close()
             return_db(conn_v)
@@ -822,9 +824,7 @@ def user_upload():
         # Duplicate check (checks both published papers and pending papers)
         dup_check = check_duplicate_paper(subject_id, year_int, exam_type, include_pending=True)
         if dup_check["is_duplicate"]:
-            return render_template("user_upload.html",
-                                   error=dup_check["message"],
-                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            return render_result(error=dup_check["message"])
 
         # --- Upload to staging bucket ---
         staging_path = f"pending/{subject_id}/{year_int}/{uuid.uuid4()}.pdf"
@@ -832,9 +832,7 @@ def user_upload():
             file_bytes = file.read()
             # 5 MB server-side cap for PDF uploads
             if len(file_bytes) > 5 * 1024 * 1024:
-                return render_template("user_upload.html",
-                                       error="File too large. Maximum PDF size is 5 MB.",
-                                       subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="File too large. Maximum PDF size is 5 MB.")
             staging_supabase.storage.from_(STAGING_BUCKET).upload(
                 staging_path,
                 file_bytes,
@@ -842,9 +840,7 @@ def user_upload():
             )
         except Exception:
             app.logger.exception("Staging upload failed")
-            return render_template("user_upload.html",
-                                   error="Upload failed. Please try again.",
-                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            return render_result(error="Upload failed. Please try again.")
 
         # --- Save pending record ---
         conn = get_db()
@@ -860,8 +856,7 @@ def user_upload():
             """, (subject_id, year_int, exam_type, original_filename,
                   staging_path, submitted_by_ip, len(file_bytes), user_id))
             conn.commit()
-            return render_template("user_upload.html", success=True,
-                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            return render_result(success=True)
         except Exception:
             app.logger.exception("Failed to save pending record")
             conn.rollback()
@@ -869,14 +864,13 @@ def user_upload():
                 staging_supabase.storage.from_(STAGING_BUCKET).remove([staging_path])
             except Exception:
                 pass
-            return render_template("user_upload.html",
-                                   error="Submission failed. Please try again.",
-                                   subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            return render_result(error="Submission failed. Please try again.")
         finally:
             cur.close()
             return_db(conn)
 
-    return render_template("user_upload.html", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+    show_success = request.args.get("success") == "1"
+    return render_template("user_upload.html", success=show_success, subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
 
 
 # ================================================================

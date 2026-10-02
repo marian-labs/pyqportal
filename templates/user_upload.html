@@ -2309,53 +2309,88 @@
             }
         });
 
-        /* ── Form submit validation ── */
-        form && form.addEventListener('submit', e => {
-            if (!deptSel.value) { e.preventDefault(); alert('Please select a department.'); return; }
+        /* ── Form submit validation & AJAX upload ── */
+        form && form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (!deptSel.value) { alert('Please select a department.'); return; }
             if (deptSel.value === 'General' && (!courseTypeSel || !courseTypeSel.value)) {
-                e.preventDefault(); alert('Please select a course type (AEC, MDC, or VAC).'); return;
+                alert('Please select a course type (AEC, MDC, or VAC).'); return;
             }
-            if (!semSel.value) { e.preventDefault(); alert('Please select a semester.'); return; }
-            if (!subjectSel.value) { e.preventDefault(); alert('Please select a subject.'); return; }
+            if (!semSel.value) { alert('Please select a semester.'); return; }
+            if (!subjectSel.value) { alert('Please select a subject.'); return; }
             const y = parseInt(document.getElementById('year').value);
-            if (!y || y < 2000 || y > 2100) { e.preventDefault(); alert('Please enter a valid year (2000–2100).'); return; }
-            if (!examTypeSel.value) { e.preventDefault(); alert('Please select an exam type.'); return; }
+            if (!y || y < 2000 || y > 2100) { alert('Please enter a valid year (2000–2100).'); return; }
+            if (!examTypeSel.value) { alert('Please select an exam type.'); return; }
             if (isDuplicatePaper) {
-                e.preventDefault();
                 alert('Already this paper is uploaded. Please choose a different year or exam type.');
                 return;
             }
-            if (!fileInput.files[0]) { e.preventDefault(); alert('Please select a PDF file.'); return; }
+            if (!fileInput.files || !fileInput.files[0]) { alert('Please select a PDF file.'); return; }
 
             window.isNavigatingAway = true;
             submitBtn.classList.add('loading');
             submitBtn.style.pointerEvents = 'none';
-            // Defer disabling the button so mobile Chrome can complete the touch gesture dispatch
-            setTimeout(() => {
-                submitBtn.disabled = true;
-            }, 50);
+            submitBtn.disabled = true;
 
             const overlay = document.getElementById('uploadLoadingOverlay');
             const statusEl = document.getElementById('uploadLoadingStatus');
             const progressEl = document.getElementById('uploadProgressBar');
-            const compressBox = document.getElementById('compressPdf');
-            const compressChecked = compressBox ? compressBox.checked : true;
 
             if (overlay) {
                 overlay.style.display = 'flex';
-                let progress = 20;
-                if (progressEl) progressEl.style.width = progress + '%';
-
-                const interval = setInterval(() => {
-                    progress += Math.floor(Math.random() * 10) + 5;
-                    if (progress > 90) progress = 92;
-                    if (progressEl) progressEl.style.width = progress + '%';
-
-                    if (progress > 50 && statusEl) {
-                        statusEl.textContent = 'Uploading paper & saving submission record...';
-                    }
-                }, 300);
+                if (progressEl) progressEl.style.width = '15%';
+                if (statusEl) statusEl.textContent = 'Uploading paper...';
             }
+
+            const formData = new FormData(form);
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', form.getAttribute('action') || '/user-upload', true);
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+            if (xhr.upload) {
+                xhr.upload.onprogress = function(event) {
+                    if (event.lengthComputable && progressEl) {
+                        const percent = Math.min(90, Math.max(15, Math.round((event.loaded / event.total) * 90)));
+                        progressEl.style.width = percent + '%';
+                        if (percent > 60 && statusEl) {
+                            statusEl.textContent = 'Saving submission record...';
+                        }
+                    }
+                };
+            }
+
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    if (progressEl) progressEl.style.width = '100%';
+                    if (statusEl) statusEl.textContent = 'Submission complete!';
+                    setTimeout(() => {
+                        window.location.href = '/user-upload?success=1';
+                    }, 350);
+                } else {
+                    if (overlay) overlay.style.display = 'none';
+                    window.isNavigatingAway = false;
+                    submitBtn.classList.remove('loading');
+                    submitBtn.style.pointerEvents = '';
+                    submitBtn.disabled = false;
+                    let errorMsg = 'Upload failed. Please try again.';
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        if (data && data.error) errorMsg = data.error;
+                    } catch (err) {}
+                    alert(errorMsg);
+                }
+            };
+
+            xhr.onerror = function() {
+                if (overlay) overlay.style.display = 'none';
+                window.isNavigatingAway = false;
+                submitBtn.classList.remove('loading');
+                submitBtn.style.pointerEvents = '';
+                submitBtn.disabled = false;
+                alert('Network connection error while uploading. Please check your internet connection and try again.');
+            };
+
+            xhr.send(formData);
         });
     </script>
     <script>
