@@ -1926,8 +1926,8 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}?v=5"></script>
-    <script src="{{ url_for('static', filename='indexjs.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='script.js') }}?v=6"></script>
+    <script src="{{ url_for('static', filename='indexjs.js') }}?v=6"></script>
     <script>
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');
@@ -2258,6 +2258,7 @@
         if (semSel) semSel.addEventListener('change', triggerDuplicateCheck);
 
         let selectedUploadFile = null;
+        let selectedUploadFileName = '';
         let fileBufferingPromise = null;
 
         function showUploadError(msg) {
@@ -2267,10 +2268,11 @@
                 txt.textContent = msg;
                 el.style.display = 'flex';
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                try {
+                    alert(msg);
+                } catch (e) {}
             }
-            try {
-                alert(msg);
-            } catch (e) {}
         }
 
         function hideUploadError() {
@@ -2292,9 +2294,8 @@
                         reader.readAsArrayBuffer(file);
                     });
                 }
-                const blob = new Blob([buffer], { type: 'application/pdf' });
-                blob.name = file.name || 'document.pdf';
-                return blob;
+                const name = file.name || selectedUploadFileName || 'document.pdf';
+                return new File([buffer], name, { type: 'application/pdf', lastModified: Date.now() });
             } catch (err) {
                 console.warn('Memory buffering error, trying FileReader fallback:', err);
                 try {
@@ -2304,9 +2305,8 @@
                         reader.onerror = reject;
                         reader.readAsArrayBuffer(file);
                     });
-                    const blob = new Blob([buffer], { type: 'application/pdf' });
-                    blob.name = file.name || 'document.pdf';
-                    return blob;
+                    const name = file.name || selectedUploadFileName || 'document.pdf';
+                    return new File([buffer], name, { type: 'application/pdf', lastModified: Date.now() });
                 } catch (frErr) {
                     console.error('All file reading methods failed:', frErr);
                     return file;
@@ -2318,15 +2318,22 @@
         async function setFile(file) {
             if (!file) return;
             if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-                showUploadError('Only PDF files are allowed.'); fileInput.value = ''; return;
+                showUploadError('Only PDF files are allowed.');
+                try { fileInput.value = ''; } catch(e) {}
+                return;
             }
             if (file.size > 5 * 1024 * 1024) {
-                showUploadError('File too large. Maximum PDF size is 5 MB.'); fileInput.value = ''; return;
+                showUploadError('File too large. Maximum PDF size is 5 MB.');
+                try { fileInput.value = ''; } catch(e) {}
+                return;
             }
             hideUploadError();
             selectedUploadFile = null;
+            selectedUploadFileName = file.name;
             fileBufferingPromise = bufferFileToMemory(file).then(buffered => {
                 selectedUploadFile = buffered;
+                // Detach from native OS content:// file handle so mobile browser doesn't lock or revoke
+                try { fileInput.value = ''; } catch (e) {}
                 return buffered;
             });
 
@@ -2429,14 +2436,28 @@
                 if (statusEl) statusEl.textContent = 'Uploading paper...';
             }
 
-            const formData = new FormData(form);
-            formData.set('file', finalFile, finalFile.name);
+            // Build FormData directly to avoid mobile Android content:// handle issues with new FormData(form)
+            const formData = new FormData();
+            const csrfEl = form.querySelector('input[name="csrf_token"]');
+            if (csrfEl && csrfEl.value) {
+                formData.append('csrf_token', csrfEl.value);
+            }
+            if (deptSel && deptSel.value) formData.append('department', deptSel.value);
+            if (courseTypeSel && courseTypeSel.value) formData.append('course_type', courseTypeSel.value);
+            if (semSel && semSel.value) formData.append('semester', semSel.value);
+            if (subjectSel && subjectSel.value) formData.append('subject_id', subjectSel.value);
+            const yrInput = document.getElementById('year');
+            const yrVal = yrInput ? yrInput.value.trim() : '';
+            formData.append('year', yrVal);
+            if (examTypeSel && examTypeSel.value) formData.append('exam_type', examTypeSel.value);
+
+            const uploadFileName = (finalFile && finalFile.name) ? finalFile.name : (selectedUploadFileName || 'document.pdf');
+            formData.append('file', finalFile, uploadFileName);
 
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/user-upload', true);
+            xhr.open('POST', form.getAttribute('action') || '/user-upload', true);
             xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 
-            const csrfEl = form.querySelector('input[name="csrf_token"]');
             if (csrfEl && csrfEl.value) {
                 xhr.setRequestHeader('X-CSRFToken', csrfEl.value);
             }
@@ -2475,7 +2496,43 @@
                 }
             };
 
-            xhr.onerror = function() {
+            xhr.onerror = async function() {
+                console.warn('XHR error encountered on mobile, attempting fetch fallback...');
+                try {
+                    const fetchRes = await fetch(form.getAttribute('action') || '/user-upload', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            ...(csrfEl && csrfEl.value ? { 'X-CSRFToken': csrfEl.value } : {})
+                        }
+                    });
+
+                    if (fetchRes.ok) {
+                        if (progressEl) progressEl.style.width = '100%';
+                        if (statusEl) statusEl.textContent = 'Submission complete!';
+                        setTimeout(() => {
+                            window.location.href = '/user-upload?success=1';
+                        }, 350);
+                        return;
+                    } else {
+                        let errText = 'Upload failed. Please try again.';
+                        try {
+                            const errData = await fetchRes.json();
+                            if (errData && errData.error) errText = errData.error;
+                        } catch (e) {}
+                        if (overlay) overlay.style.display = 'none';
+                        window.isNavigatingAway = false;
+                        submitBtn.classList.remove('loading');
+                        submitBtn.style.pointerEvents = '';
+                        submitBtn.disabled = false;
+                        showUploadError(errText);
+                        return;
+                    }
+                } catch (fallbackErr) {
+                    console.error('Fetch fallback network failure:', fallbackErr);
+                }
+
                 if (overlay) overlay.style.display = 'none';
                 window.isNavigatingAway = false;
                 submitBtn.classList.remove('loading');

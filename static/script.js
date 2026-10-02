@@ -754,9 +754,8 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
                     reader.readAsArrayBuffer(file);
                 });
             }
-            const blob = new Blob([buffer], { type: 'application/pdf' });
-            blob.name = file.name || 'paper.pdf';
-            return blob;
+            const name = file.name || 'paper.pdf';
+            return new File([buffer], name, { type: 'application/pdf', lastModified: Date.now() });
         } catch (err) {
             console.warn('Memory buffering error, trying FileReader fallback:', err);
             try {
@@ -766,9 +765,8 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
                     reader.onerror = reject;
                     reader.readAsArrayBuffer(file);
                 });
-                const blob = new Blob([buffer], { type: 'application/pdf' });
-                blob.name = file.name || 'paper.pdf';
-                return blob;
+                const name = file.name || 'paper.pdf';
+                return new File([buffer], name, { type: 'application/pdf', lastModified: Date.now() });
             } catch (frErr) {
                 console.error('All file reading methods failed:', frErr);
                 return file;
@@ -799,6 +797,7 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
         selectedUploadFile = null;
         fileBufferingPromise = bufferFileToMemory(file).then(buffered => {
             selectedUploadFile = buffered;
+            try { uploadFile.value = ''; } catch (e) {}
             return buffered;
         });
 
@@ -894,14 +893,28 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
                 Uploading…`;
         }
 
-        const formData = new FormData(uploadForm);
-        formData.set('file', finalFile, finalFile.name);
+        // Build clean FormData without touching native DOM file handles
+        const formData = new FormData();
+        const csrfEl = uploadForm.querySelector('input[name="csrf_token"]');
+        if (csrfEl && csrfEl.value) {
+            formData.append('csrf_token', csrfEl.value);
+        }
+        if (deptEl && deptEl.value) formData.append('department', deptEl.value);
+        const ctEl = document.getElementById('uploadCourseType');
+        if (ctEl && ctEl.value) formData.append('course_type', ctEl.value);
+        if (semEl && semEl.value) formData.append('semester', semEl.value);
+        if (subEl && subEl.value) formData.append('subject_id', subEl.value);
+        if (yearEl && yearEl.value) formData.append('year', yearEl.value);
+        if (exEl && exEl.value) formData.append('exam_type', exEl.value);
 
+        const uploadName = (finalFile && finalFile.name) ? finalFile.name : 'paper.pdf';
+        formData.append('file', finalFile, uploadName);
+
+        const uploadUrl = uploadForm.getAttribute('action') || '/upload';
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', uploadForm.getAttribute('action') || '/upload', true);
+        xhr.open('POST', uploadUrl, true);
         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 
-        const csrfEl = uploadForm.querySelector('input[name="csrf_token"]');
         if (csrfEl && csrfEl.value) {
             xhr.setRequestHeader('X-CSRFToken', csrfEl.value);
         }
@@ -926,12 +939,52 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
                     txt.textContent = errorMsg;
                     banner.style.display = 'block';
                     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    alert(errorMsg);
                 }
-                alert(errorMsg);
             }
         };
 
-        xhr.onerror = function() {
+        xhr.onerror = async function() {
+            console.warn('XHR error on /upload, attempting fetch fallback...');
+            try {
+                const fetchRes = await fetch(uploadUrl, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        ...(csrfEl && csrfEl.value ? { 'X-CSRFToken': csrfEl.value } : {})
+                    }
+                });
+                if (fetchRes.ok) {
+                    window.location.href = '/upload?success=1';
+                    return;
+                } else {
+                    let errText = 'Upload failed. Please try again.';
+                    try {
+                        const errData = await fetchRes.json();
+                        if (errData && errData.error) errText = errData.error;
+                    } catch (e) {}
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.style.pointerEvents = '';
+                        submitBtn.innerHTML = originalBtnHtml;
+                    }
+                    const banner = document.getElementById('uploadErrorAlert');
+                    const txt = document.getElementById('uploadErrorAlertText');
+                    if (banner && txt) {
+                        txt.textContent = errText;
+                        banner.style.display = 'block';
+                        banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    } else {
+                        alert(errText);
+                    }
+                    return;
+                }
+            } catch (fallbackErr) {
+                console.error('Fetch fallback error:', fallbackErr);
+            }
+
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.style.pointerEvents = '';
@@ -943,8 +996,9 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
                 txt.textContent = 'Network connection error while uploading. Please check your connection and try again.';
                 banner.style.display = 'block';
                 banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                alert('Network connection error while uploading. Please check your connection and try again.');
             }
-            alert('Network connection error while uploading. Please check your connection and try again.');
         };
 
         xhr.send(formData);
