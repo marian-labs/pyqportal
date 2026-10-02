@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=5">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=5">
 </head>
 <body class="upload-page">
   <!-- ==================== HEADER ==================== -->
@@ -466,8 +466,8 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='uploadjs.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='script.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='uploadjs.js') }}?v=5"></script>
     <script>
         /* ── Scroll reveal ── */
         const _revealObs = new IntersectionObserver((entries) => {
@@ -600,17 +600,6 @@
             if (subSel) subSel.addEventListener('change', triggerDupCheck);
             if (yrSel) yrSel.addEventListener('change', triggerDupCheck);
             if (examSel) examSel.addEventListener('change', triggerDupCheck);
-
-            if (uploadForm) {
-                uploadForm.addEventListener('submit', function(e) {
-                    if (isDuplicatePaper) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        alert('Already this paper is uploaded.');
-                        return false;
-                    }
-                }, true);
-            }
         })();
     </script>
 </body>

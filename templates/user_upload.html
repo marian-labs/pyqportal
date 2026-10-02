@@ -15,8 +15,8 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=5">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=5">
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <style>
         html, body {
@@ -1926,8 +1926,8 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='indexjs.js') }}?v=3"></script>
+    <script src="{{ url_for('static', filename='script.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='indexjs.js') }}?v=5"></script>
     <script>
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');
@@ -2256,18 +2256,6 @@
         if (deptSel) deptSel.addEventListener('change', triggerDuplicateCheck);
         if (courseTypeSel) courseTypeSel.addEventListener('change', triggerDuplicateCheck);
         if (semSel) semSel.addEventListener('change', triggerDuplicateCheck);
-
-        const formEl = document.getElementById('uploadForm');
-        if (formEl) {
-            formEl.addEventListener('submit', function(e) {
-                if (isDuplicatePaper) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    alert('Already this paper is uploaded. Cannot submit duplicate papers.');
-                    return false;
-                }
-            }, true);
-        }
 
         let selectedUploadFile = null;
         let fileBufferingPromise = null;

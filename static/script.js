@@ -568,10 +568,10 @@ window.closeAnalyseModal = function() {
     applyHash();
 }
 
-// ==================== UPLOAD PAGE FUNCTIONALITY ====================
-if (document.getElementById('uploadForm')) {
+// ==================== UPLOAD PAGE FUNCTIONALITY (Admin /upload only) ====================
+if (document.body.classList.contains('upload-page') && document.getElementById('uploadForm')) {
     const uploadForm     = document.getElementById('uploadForm');
-    const uploadFile     = document.getElementById('uploadFile') || document.getElementById('fileInput');
+    const uploadFile     = document.getElementById('uploadFile');
     const fileUploadArea = document.getElementById('fileUploadArea');
     const fileSelected   = document.getElementById('fileSelected');
     const fileName       = document.getElementById('fileName');
