@@ -346,14 +346,7 @@
             background: rgba(99, 102, 241, .04);
         }
 
-        .up-dropzone input[type="file"] {
-            position: absolute;
-            inset: 0;
-            opacity: 0;
-            cursor: pointer;
-            width: 100%;
-            height: 100%;
-        }
+        /* fileInput is now outside the dropzone (mobile fix) — no inner input rule needed */
 
         .up-dz-icon {
             display: block;
@@ -1579,8 +1572,13 @@
                         <!-- File -->
                         <div class="up-group full">
                             <label class="up-label">PDF File</label>
+                            <!-- fileInput is intentionally placed OUTSIDE the overflow:hidden dropzone.
+                                 On mobile (Android/iOS), overflow:hidden clips the native file-picker
+                                 hit-target, preventing the OS file dialog from opening.
+                                 The dropzone click triggers fileInput.click() via JS instead. -->
+                            <input type="file" name="file" id="fileInput" accept=".pdf,application/pdf"
+                                style="position:fixed; top:-1000px; left:-1000px; opacity:0; width:1px; height:1px; pointer-events:none;" />
                             <div class="up-dropzone" id="dropzone">
-                                <input type="file" name="file" id="fileInput" accept=".pdf,application/pdf" />
                                 <svg class="up-dz-icon" width="32" height="32" viewBox="0 0 24 24" fill="none"
                                     stroke="currentColor" stroke-width="1.5" id="dzIcon">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -2369,6 +2367,16 @@
             if (confirm('Are you sure you want to remove this PDF file?')) {
                 clearFile();
             }
+        });
+
+        // Since fileInput is now outside the overflow:hidden dropzone (for mobile compatibility),
+        // we need to programmatically trigger the file picker when the dropzone is clicked/tapped.
+        dropzone.addEventListener('click', (e) => {
+            // Don't open file picker if clicking the Remove button
+            if (e.target === dzRemove || dzRemove.contains(e.target)) return;
+            // Don't open file picker if a file is already selected (dropzone has .has-file)
+            if (dropzone.classList.contains('has-file')) return;
+            fileInput.click();
         });
 
         dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
