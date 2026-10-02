@@ -371,7 +371,8 @@
         }
 
         .up-dropzone.has-file input[type="file"] {
-            display: none;
+            pointer-events: none;
+            opacity: 0;
         }
 
         .up-dz-file {
@@ -1478,7 +1479,7 @@
 
             <!-- LEFT: Upload Form -->
             <div class="up-card">
-                <form method="POST" enctype="multipart/form-data" id="uploadForm" novalidate>
+                <form action="{{ url_for('user_upload') }}" method="POST" enctype="multipart/form-data" id="uploadForm" novalidate>
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <div class="up-grid">
@@ -1576,7 +1577,7 @@
                         <div class="up-group full">
                             <label class="up-label">PDF File</label>
                             <div class="up-dropzone" id="dropzone">
-                                <input type="file" name="file" id="fileInput" accept=".pdf,application/pdf" required />
+                                <input type="file" name="file" id="fileInput" accept=".pdf,application/pdf" />
                                 <svg class="up-dz-icon" width="32" height="32" viewBox="0 0 24 24" fill="none"
                                     stroke="currentColor" stroke-width="1.5" id="dzIcon">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -2122,14 +2123,13 @@
 
         function setUploadAndCameraBlocked(blocked) {
             const dz = document.getElementById('dropzone');
-            const fInput = document.getElementById('fileInput');
             const scanBtn = document.getElementById('openScannerBtn');
-            const camInput = document.getElementById('cameraInput');
-            const galInput = document.getElementById('galleryInput');
+            const chooseGalBtn = document.getElementById('chooseGalleryBtn');
 
-            if (fInput) fInput.disabled = blocked;
-            if (camInput) camInput.disabled = blocked;
-            if (galInput) galInput.disabled = blocked;
+            // NOTE: Never set .disabled = true on file inputs (fileInput, cameraInput, galleryInput)
+            // as doing so causes mobile OS (Android/iOS) to destroy active content:// file stream handles,
+            // triggering net::ERR_FAILED on subsequent form submit.
+            // Interaction is safely controlled via UI container pointer-events and buttons instead.
 
             if (dz) {
                 if (blocked) {
@@ -2159,6 +2159,21 @@
                     scanBtn.style.filter = '';
                     scanBtn.style.cursor = '';
                     scanBtn.title = '';
+                }
+            }
+
+            if (chooseGalBtn) {
+                chooseGalBtn.disabled = blocked;
+                if (blocked) {
+                    chooseGalBtn.style.pointerEvents = 'none';
+                    chooseGalBtn.style.opacity = '0.45';
+                    chooseGalBtn.style.cursor = 'not-allowed';
+                    chooseGalBtn.title = 'Gallery blocked: This paper is already uploaded or pending review.';
+                } else {
+                    chooseGalBtn.style.pointerEvents = '';
+                    chooseGalBtn.style.opacity = '';
+                    chooseGalBtn.style.cursor = '';
+                    chooseGalBtn.title = '';
                 }
             }
 
@@ -2311,7 +2326,11 @@
 
             window.isNavigatingAway = true;
             submitBtn.classList.add('loading');
-            submitBtn.disabled = true;
+            submitBtn.style.pointerEvents = 'none';
+            // Defer disabling the button so mobile Chrome can complete the touch gesture dispatch
+            setTimeout(() => {
+                submitBtn.disabled = true;
+            }, 50);
 
             const overlay = document.getElementById('uploadLoadingOverlay');
             const statusEl = document.getElementById('uploadLoadingStatus');
@@ -3387,7 +3406,7 @@
 
         // Guard desktop tab close, reload, or URL changes
         window.addEventListener('beforeunload', (e) => {
-            if (window.isNavigatingAway) return;
+            if (window.isNavigatingAway || (typeof isMobileDevice !== 'undefined' && isMobileDevice)) return;
 
             const cropModal = document.getElementById('cropModal');
             const isCrop = cropModal && cropModal.style.display !== 'none';
