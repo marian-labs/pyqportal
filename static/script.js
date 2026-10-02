@@ -737,41 +737,36 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
         }, false);
     }
 
-    let selectedUploadFile = null;
-    let fileBufferingPromise = null;
+    let inMemoryPdfBlob = null;
+    let inMemoryPdfName = '';
+    let isReadingFile = false;
+    let fileReadPromise = null;
 
-    async function bufferFileToMemory(file) {
-        if (!file) return null;
-        try {
-            let buffer;
-            if (typeof file.arrayBuffer === 'function') {
-                buffer = await file.arrayBuffer();
-            } else {
-                buffer = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result);
-                    reader.onerror = reject;
-                    reader.readAsArrayBuffer(file);
-                });
-            }
-            const name = file.name || 'paper.pdf';
-            return new File([buffer], name, { type: 'application/pdf', lastModified: Date.now() });
-        } catch (err) {
-            console.warn('Memory buffering error, trying FileReader fallback:', err);
-            try {
-                const buffer = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result);
-                    reader.onerror = reject;
-                    reader.readAsArrayBuffer(file);
-                });
-                const name = file.name || 'paper.pdf';
-                return new File([buffer], name, { type: 'application/pdf', lastModified: Date.now() });
-            } catch (frErr) {
-                console.error('All file reading methods failed:', frErr);
-                return file;
-            }
-        }
+    function readFileToMemory(file) {
+        if (!file) return Promise.resolve(null);
+        isReadingFile = true;
+        inMemoryPdfName = file.name || 'paper.pdf';
+
+        fileReadPromise = new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    inMemoryPdfBlob = new Blob([e.target.result], { type: 'application/pdf' });
+                    isReadingFile = false;
+                    resolve(inMemoryPdfBlob);
+                } catch (err) {
+                    isReadingFile = false;
+                    reject(err);
+                }
+            };
+            reader.onerror = function() {
+                isReadingFile = false;
+                reject(new Error(reader.error ? reader.error.message : 'Could not read file from device storage'));
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        return fileReadPromise;
     }
 
     if (uploadFile) {
@@ -780,26 +775,18 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
         });
     }
 
-    function handleFileSelect(file) {
-        if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
+    async function handleFileSelect(file) {
+        const fileNameLower = (file.name || '').toLowerCase();
+        if (file.type !== 'application/pdf' && !fileNameLower.endsWith('.pdf')) {
             showError('fileError', 'Only PDF files are allowed');
-            uploadFile.value = '';
-            selectedUploadFile = null;
+            clearAdminFile();
             return;
         }
         if (file.size > 5 * 1024 * 1024) {
             showError('fileError', 'File size must not exceed 5MB');
-            uploadFile.value = '';
-            selectedUploadFile = null;
+            clearAdminFile();
             return;
         }
-
-        selectedUploadFile = null;
-        fileBufferingPromise = bufferFileToMemory(file).then(buffered => {
-            selectedUploadFile = buffered;
-            try { uploadFile.value = ''; } catch (e) {}
-            return buffered;
-        });
 
         if (fileName) fileName.textContent = file.name;
         if (fileSize) fileSize.textContent = formatFileSize(file.size);
@@ -807,17 +794,31 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
         if (uploadContent) uploadContent.style.display = 'none';
         if (fileSelected) fileSelected.style.display = 'flex';
         hideError('fileError');
+
+        try {
+            await readFileToMemory(file);
+        } catch (err) {
+            console.error('File read error on admin upload:', err);
+            showError('fileError', 'Could not read selected file (' + (err.message || 'Permission denied') + '). Please try selecting it again.');
+            clearAdminFile();
+        }
+    }
+
+    function clearAdminFile() {
+        inMemoryPdfBlob = null;
+        inMemoryPdfName = '';
+        fileReadPromise = null;
+        isReadingFile = false;
+        try { uploadFile.value = ''; } catch (e) {}
+        const uploadContent = document.querySelector('.file-upload-content');
+        if (uploadContent) uploadContent.style.display = 'block';
+        if (fileSelected) fileSelected.style.display = 'none';
     }
 
     if (removeFile) {
         removeFile.addEventListener('click', (e) => {
             e.stopPropagation();
-            uploadFile.value = '';
-            selectedUploadFile = null;
-            fileBufferingPromise = null;
-            const uploadContent = document.querySelector('.file-upload-content');
-            if (uploadContent) uploadContent.style.display = 'block';
-            if (fileSelected) fileSelected.style.display = 'none';
+            clearAdminFile();
         });
     }
 
@@ -858,25 +859,33 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
         if (semEl  && !semEl.value)   { showError('semesterError',   'Please select a semester');   isValid = false; }
         if (exEl   && !exEl.value)    { showError('examTypeError',   'Please select an exam type'); isValid = false; }
 
-        if (fileBufferingPromise) {
-            try { await fileBufferingPromise; } catch (err) {}
-        }
-
-        let finalFile = selectedUploadFile || (uploadFile && uploadFile.files && uploadFile.files[0]);
-        if (!finalFile) {
-            showError('fileError', 'Please select a PDF file');
-            isValid = false;
-        } else if (finalFile.type !== 'application/pdf' && !finalFile.name.endsWith('.pdf')) {
-            showError('fileError', 'Only PDF files are allowed');
-            isValid = false;
-        }
-
         if (!isValid) return;
 
-        // Ensure file is loaded into RAM memory
-        if (!selectedUploadFile && finalFile) {
-            finalFile = await bufferFileToMemory(finalFile);
-            selectedUploadFile = finalFile;
+        // Ensure in-memory file read has finished
+        if (isReadingFile && fileReadPromise) {
+            try {
+                await fileReadPromise;
+            } catch (err) {
+                showError('fileError', 'File is still loading or could not be read: ' + (err.message || 'Error'));
+                return;
+            }
+        }
+
+        if (!inMemoryPdfBlob) {
+            const fallbackFile = uploadFile && uploadFile.files && uploadFile.files[0];
+            if (fallbackFile) {
+                try {
+                    await readFileToMemory(fallbackFile);
+                } catch (err) {
+                    showError('fileError', 'Could not read PDF file: ' + (err.message || 'Error'));
+                    return;
+                }
+            }
+        }
+
+        if (!inMemoryPdfBlob) {
+            showError('fileError', 'Please select a PDF file');
+            return;
         }
 
         const submitBtn = uploadForm.querySelector('button[type="submit"]');
@@ -893,11 +902,6 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
                 Uploading…`;
         }
 
-        // ── Upload via fetch() ───────────────────────────────────────────────────────
-        // We use fetch() instead of XHR because on Android Chrome, XHR.send()
-        // with multipart FormData containing a File backed by a content:// URI
-        // triggers net::ERR_FAILED. fetch() with a plain Blob (from arrayBuffer)
-        // is reliable across all platforms including mobile.
         const csrfEl = uploadForm.querySelector('input[name="csrf_token"]');
         const uploadUrl = uploadForm.getAttribute('action') || '/upload';
 
@@ -919,13 +923,6 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
         }
 
         try {
-            // Re-read the file as an ArrayBuffer and wrap as a plain Blob.
-            // This strips any Android content:// URI binding from the File object,
-            // which is what causes XHR to fail with net::ERR_FAILED on mobile.
-            const fileArrayBuffer = await finalFile.arrayBuffer();
-            const safeBlob = new Blob([fileArrayBuffer], { type: 'application/pdf' });
-            const uploadName = (finalFile && finalFile.name) ? finalFile.name : 'paper.pdf';
-
             const fd = new FormData();
             if (csrfEl && csrfEl.value) fd.append('csrf_token', csrfEl.value);
             if (deptEl && deptEl.value) fd.append('department', deptEl.value);
@@ -935,11 +932,12 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
             if (subEl && subEl.value) fd.append('subject_id', subEl.value);
             if (yearEl && yearEl.value) fd.append('year', yearEl.value);
             if (exEl && exEl.value) fd.append('exam_type', exEl.value);
-            fd.append('file', safeBlob, uploadName);
+            fd.append('file', inMemoryPdfBlob, inMemoryPdfName || 'paper.pdf');
 
             const fetchRes = await fetch(uploadUrl, {
                 method: 'POST',
                 body: fd,
+                credentials: 'same-origin',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
                     ...(csrfEl && csrfEl.value ? { 'X-CSRFToken': csrfEl.value } : {})
@@ -953,12 +951,14 @@ if (document.body.classList.contains('upload-page') && document.getElementById('
                 try {
                     const data = await fetchRes.json();
                     if (data && data.error) errorMsg = data.error;
-                } catch (e) {}
+                } catch (e) {
+                    errorMsg = 'Server error (' + fetchRes.status + '). Please try again.';
+                }
                 showUploadBanner(errorMsg);
             }
         } catch (err) {
             console.error('Upload failed:', err);
-            showUploadBanner('Upload failed. Please check your connection and try again.');
+            showUploadBanner('Upload failed: ' + (err.message || 'Network error') + '. Please try again.');
         }
     });
 }

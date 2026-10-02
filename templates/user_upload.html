@@ -2278,62 +2278,53 @@
             if (el) el.style.display = 'none';
         }
 
-        async function bufferFileToMemory(file) {
-            if (!file) return null;
-            try {
-                let buffer;
-                if (typeof file.arrayBuffer === 'function') {
-                    buffer = await file.arrayBuffer();
-                } else {
-                    buffer = await new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = () => resolve(reader.result);
-                        reader.onerror = reject;
-                        reader.readAsArrayBuffer(file);
-                    });
-                }
-                const name = file.name || selectedUploadFileName || 'document.pdf';
-                return new File([buffer], name, { type: 'application/pdf', lastModified: Date.now() });
-            } catch (err) {
-                console.warn('Memory buffering error, trying FileReader fallback:', err);
-                try {
-                    const buffer = await new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = () => resolve(reader.result);
-                        reader.onerror = reject;
-                        reader.readAsArrayBuffer(file);
-                    });
-                    const name = file.name || selectedUploadFileName || 'document.pdf';
-                    return new File([buffer], name, { type: 'application/pdf', lastModified: Date.now() });
-                } catch (frErr) {
-                    console.error('All file reading methods failed:', frErr);
-                    return file;
-                }
-            }
+        let inMemoryPdfBlob = null;
+        let inMemoryPdfName = '';
+        let isReadingFile = false;
+        let fileReadPromise = null;
+
+        function readFileToMemory(file) {
+            if (!file) return Promise.resolve(null);
+            isReadingFile = true;
+            inMemoryPdfName = file.name || 'document.pdf';
+
+            fileReadPromise = new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        inMemoryPdfBlob = new Blob([e.target.result], { type: 'application/pdf' });
+                        isReadingFile = false;
+                        resolve(inMemoryPdfBlob);
+                    } catch (err) {
+                        isReadingFile = false;
+                        reject(err);
+                    }
+                };
+                reader.onerror = function() {
+                    isReadingFile = false;
+                    reject(new Error(reader.error ? reader.error.message : 'Could not read file from device storage'));
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            return fileReadPromise;
         }
 
-        /* ── File drag & drop ── */
+        /* ── File drag & drop / selection ── */
         async function setFile(file) {
             if (!file) return;
-            if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
+            const fileNameLower = (file.name || '').toLowerCase();
+            if (file.type !== 'application/pdf' && !fileNameLower.endsWith('.pdf')) {
                 showUploadError('Only PDF files are allowed.');
-                try { fileInput.value = ''; } catch(e) {}
+                clearFile();
                 return;
             }
             if (file.size > 5 * 1024 * 1024) {
                 showUploadError('File too large. Maximum PDF size is 5 MB.');
-                try { fileInput.value = ''; } catch(e) {}
+                clearFile();
                 return;
             }
             hideUploadError();
-            selectedUploadFile = null;
-            selectedUploadFileName = file.name;
-            fileBufferingPromise = bufferFileToMemory(file).then(buffered => {
-                selectedUploadFile = buffered;
-                // Detach from native OS content:// file handle so mobile browser doesn't lock or revoke
-                try { fileInput.value = ''; } catch (e) {}
-                return buffered;
-            });
 
             dzText.textContent = file.name;
             dzFilename.classList.add('visible');
@@ -2343,12 +2334,29 @@
             dzHint.style.display = 'none';
             dzRemove.style.display = 'inline-flex';
             triggerDuplicateCheck();
+
+            // If file is already a memory Blob from camera scanner
+            if (file._isInMemory || (file instanceof Blob && !(file instanceof File))) {
+                inMemoryPdfBlob = file;
+                inMemoryPdfName = file.name || 'scanned_paper.pdf';
+                return;
+            }
+
+            try {
+                await readFileToMemory(file);
+            } catch (err) {
+                console.error('File read error on selection:', err);
+                showUploadError('Could not read the selected file (' + (err.message || 'Permission denied') + '). Please ensure it is stored locally on your device or pick from Downloads.');
+                clearFile();
+            }
         }
 
         function clearFile() {
-            selectedUploadFile = null;
-            fileBufferingPromise = null;
-            fileInput.value = '';
+            inMemoryPdfBlob = null;
+            inMemoryPdfName = '';
+            fileReadPromise = null;
+            isReadingFile = false;
+            try { fileInput.value = ''; } catch(e) {}
             dzText.textContent = '';
             dzFilename.classList.remove('visible');
             dropzone.classList.remove('has-file');
@@ -2369,12 +2377,9 @@
             }
         });
 
-        // Since fileInput is now outside the overflow:hidden dropzone (for mobile compatibility),
-        // we need to programmatically trigger the file picker when the dropzone is clicked/tapped.
+        // Trigger file picker when dropzone is tapped
         dropzone.addEventListener('click', (e) => {
-            // Don't open file picker if clicking the Remove button
             if (e.target === dzRemove || dzRemove.contains(e.target)) return;
-            // Don't open file picker if a file is already selected (dropzone has .has-file)
             if (dropzone.classList.contains('has-file')) return;
             fileInput.click();
         });
@@ -2414,19 +2419,31 @@
                 return;
             }
 
-            if (fileBufferingPromise) {
+            // Ensure in-memory file read has finished
+            if (isReadingFile && fileReadPromise) {
                 try {
-                    await fileBufferingPromise;
-                } catch (e) {}
+                    await fileReadPromise;
+                } catch (err) {
+                    showUploadError('File is still loading or could not be read: ' + (err.message || 'Error') + '. Please select the file again.');
+                    return;
+                }
             }
 
-            let finalFile = selectedUploadFile || (fileInput.files && fileInput.files[0]);
-            if (!finalFile) { showUploadError('Please select a PDF file.'); return; }
+            if (!inMemoryPdfBlob) {
+                const fallbackFile = fileInput.files && fileInput.files[0];
+                if (fallbackFile) {
+                    try {
+                        await readFileToMemory(fallbackFile);
+                    } catch (err) {
+                        showUploadError('Could not read PDF file: ' + (err.message || 'Error') + '. Please try selecting again.');
+                        return;
+                    }
+                }
+            }
 
-            // Ensure file is loaded into RAM to avoid Android content:// stream invalidation
-            if (!selectedUploadFile) {
-                finalFile = await bufferFileToMemory(finalFile);
-                selectedUploadFile = finalFile;
+            if (!inMemoryPdfBlob) {
+                showUploadError('Please select a PDF file.');
+                return;
             }
 
             window.isNavigatingAway = true;
@@ -2444,15 +2461,9 @@
                 if (statusEl) statusEl.textContent = 'Uploading paper...';
             }
 
-            // ── Upload via fetch() ──────────────────────────────────────────────────────
-            // We use fetch() instead of XHR because on Android Chrome, XHR.send()
-            // with multipart FormData containing a File backed by a content:// URI
-            // triggers net::ERR_FAILED. fetch() with a plain Blob (from arrayBuffer)
-            // is reliable across all platforms including mobile.
             const csrfEl = form.querySelector('input[name="csrf_token"]');
             const uploadAction = form.getAttribute('action') || '/user-upload';
 
-            // Fake progress timer (fetch doesn't expose upload progress)
             let progressTimer = null;
             let fakePercent = 15;
             if (progressEl) {
@@ -2478,13 +2489,6 @@
             }
 
             try {
-                // Re-read the file as an ArrayBuffer and wrap as a plain Blob.
-                // This strips any Android content:// URI binding from the File object,
-                // which is what causes XHR to fail with net::ERR_FAILED on mobile.
-                const fileArrayBuffer = await finalFile.arrayBuffer();
-                const safeBlob = new Blob([fileArrayBuffer], { type: 'application/pdf' });
-                const fname = (finalFile && finalFile.name) ? finalFile.name : (selectedUploadFileName || 'document.pdf');
-
                 const fd = new FormData();
                 if (csrfEl && csrfEl.value) fd.append('csrf_token', csrfEl.value);
                 if (deptSel && deptSel.value) fd.append('department', deptSel.value);
@@ -2494,11 +2498,12 @@
                 const yrInput = document.getElementById('year');
                 fd.append('year', yrInput ? yrInput.value.trim() : '');
                 if (examTypeSel && examTypeSel.value) fd.append('exam_type', examTypeSel.value);
-                fd.append('file', safeBlob, fname);
+                fd.append('file', inMemoryPdfBlob, inMemoryPdfName || 'document.pdf');
 
                 const fetchRes = await fetch(uploadAction, {
                     method: 'POST',
                     body: fd,
+                    credentials: 'same-origin',
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
                         ...(csrfEl && csrfEl.value ? { 'X-CSRFToken': csrfEl.value } : {})
@@ -2516,14 +2521,17 @@
                     try {
                         const errData = await fetchRes.json();
                         if (errData && errData.error) errorMsg = errData.error;
-                    } catch (e) {}
+                    } catch (e) {
+                        errorMsg = 'Server error (' + fetchRes.status + '). Please try again.';
+                    }
                     resetSubmitBtn();
                     showUploadError(errorMsg);
                 }
             } catch (err) {
-                console.error('Upload failed:', err);
+                console.error('Upload error:', err);
+                stopProgress();
                 resetSubmitBtn();
-                showUploadError('Upload failed. Please check your connection and try again.');
+                showUploadError('Upload failed: ' + (err.message || 'Network error') + '. Please try again.');
             }
         });
     </script>
@@ -2940,7 +2948,8 @@
                     const scannedFileName = `scanned_paper_${dateStr}_${Math.floor(Math.random() * 1000)}.pdf`;
 
                     const scannedFile = new File([pdfBlob], scannedFileName, { type: 'application/pdf', lastModified: Date.now() });
-
+                    scannedFile._isInMemory = true;
+                    pdfBlob._isInMemory = true;
                     try {
                         const dt = new DataTransfer();
                         dt.items.add(scannedFile);
@@ -3506,7 +3515,7 @@
             const hasYr = !!(yr && yr.value && yr.value !== '');
             const hasEx = !!(ex && ex.value);
             const hasCType = !!(cType && cType.value);
-            const hasFile = !!(fi && fi.files && fi.files.length > 0);
+            const hasFile = !!(fi && fi.files && fi.files.length > 0) || !!(typeof inMemoryPdfBlob !== 'undefined' && inMemoryPdfBlob);
             const hasScanned = !!(typeof scannedImagesArray !== 'undefined' && scannedImagesArray && scannedImagesArray.length > 0);
 
             return hasDept || hasSem || hasSubj || hasYr || hasEx || hasCType || hasFile || hasScanned;
