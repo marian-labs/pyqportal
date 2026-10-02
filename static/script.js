@@ -743,14 +743,36 @@ if (document.getElementById('uploadForm')) {
     async function bufferFileToMemory(file) {
         if (!file) return null;
         try {
-            const buffer = await file.arrayBuffer();
-            return new File([buffer], file.name || 'paper.pdf', {
-                type: 'application/pdf',
-                lastModified: file.lastModified || Date.now()
-            });
+            let buffer;
+            if (typeof file.arrayBuffer === 'function') {
+                buffer = await file.arrayBuffer();
+            } else {
+                buffer = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+            const blob = new Blob([buffer], { type: 'application/pdf' });
+            blob.name = file.name || 'paper.pdf';
+            return blob;
         } catch (err) {
-            console.warn('Memory buffering fallback:', err);
-            return file;
+            console.warn('Memory buffering error, trying FileReader fallback:', err);
+            try {
+                const buffer = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsArrayBuffer(file);
+                });
+                const blob = new Blob([buffer], { type: 'application/pdf' });
+                blob.name = file.name || 'paper.pdf';
+                return blob;
+            } catch (frErr) {
+                console.error('All file reading methods failed:', frErr);
+                return file;
+            }
         }
     }
 
