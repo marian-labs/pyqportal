@@ -489,17 +489,36 @@ def home():
 def upload_page():
     departments_list = get_departments(active_only=True)
     depts_dict = get_departments_dict(departments_list)
+
+    is_ajax = (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or "application/json" in request.headers.get("Accept", "")
+    )
+
+    def render_result(error=None, success=False):
+        if is_ajax:
+            if error:
+                return jsonify({"error": error}), 400
+            return jsonify({"success": True}), 200
+        if success:
+            flash("Question paper uploaded successfully.")
+            return redirect(url_for("upload_page"))
+        return render_template("upload.html", error=error, subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+
+    if request.args.get("success") == "1":
+        flash("Question paper uploaded successfully.")
+
     if request.method == "POST":
         conn = get_db()
         cur = conn.cursor()
         try:
             subject_raw = request.form.get("subject_id")
             if not subject_raw or subject_raw.strip() == "":
-                return render_template("upload.html", error="Subject is required", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="Subject is required")
             try:
                 subject_id = int(subject_raw)
             except ValueError:
-                return render_template("upload.html", error="Invalid subject", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="Invalid subject")
 
             cur.execute(
                 "SELECT subject_id, subject_name, semester, COALESCE(course_type, 'CORE') FROM subjects WHERE subject_id = %s",
@@ -507,12 +526,12 @@ def upload_page():
             )
             row = cur.fetchone()
             if not row:
-                return render_template("upload.html", error="Subject not found.", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="Subject not found.")
             subject_id, subject_name, subj_sem, subj_ctype = row
             if subj_ctype in ('AEC', 'MDC') and subj_sem not in (1, 2):
-                return render_template("upload.html", error="AEC and MDC papers can only be for Semester 1 or 2.", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="AEC and MDC papers can only be for Semester 1 or 2.")
             if subj_ctype == 'VAC' and subj_sem not in (3, 4):
-                return render_template("upload.html", error="VAC papers can only be for Semester 3 or 4.", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="VAC papers can only be for Semester 3 or 4.")
 
             year = request.form.get("year")
             try:
@@ -521,13 +540,13 @@ def upload_page():
                 year_int = int(str(year).split("-", 1)
                                [0].strip()) if "-" in str(year) else int(year)
             except (ValueError, TypeError) as exc:
-                return render_template("upload.html", error=f"Invalid year: {exc}", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error=f"Invalid year: {exc}")
 
             file = request.files.get("file")
             if not file or not file.filename:
-                return render_template("upload.html", error="No file provided", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="No file provided")
             if not allowed_file(file.filename):
-                return render_template("upload.html", error="Only PDF files are allowed", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="Only PDF files are allowed")
 
             exam_type = request.form.get(
                 "examType") or request.form.get("exam_type") or ""
@@ -536,12 +555,12 @@ def upload_page():
             # Duplicate check in question_papers
             dup_check = check_duplicate_paper(subject_id, year_int, exam_type, include_pending=False)
             if dup_check["is_duplicate"]:
-                return render_template("upload.html", error=dup_check["message"], subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error=dup_check["message"])
 
             file_bytes = file.read()
             # 5 MB server-side cap for PDF uploads
             if len(file_bytes) > 5 * 1024 * 1024:
-                return render_template("upload.html", error="File too large. Maximum PDF size is 5 MB.", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+                return render_result(error="File too large. Maximum PDF size is 5 MB.")
             unique_name = f"{subject_id}/{year_int}/{uuid.uuid4()}.pdf"
             supabase.storage.from_(SUPABASE_BUCKET).upload(
                 unique_name,
@@ -566,13 +585,12 @@ def upload_page():
             conn.commit()
             clear_departments_cache()
 
-            flash("Question paper uploaded successfully.")
-            return redirect(url_for("upload_page"))
+            return render_result(success=True)
 
         except Exception:
             conn.rollback()
             app.logger.exception("Upload failed")
-            return render_template("upload.html", error="Upload failed. Please try again.", subjects=get_subjects(), departments=depts_dict, departments_list=departments_list)
+            return render_result(error="Upload failed. Please try again.")
         finally:
             cur.close()
             return_db(conn)

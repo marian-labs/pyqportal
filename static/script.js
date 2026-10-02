@@ -737,6 +737,23 @@ if (document.getElementById('uploadForm')) {
         }, false);
     }
 
+    let selectedUploadFile = null;
+    let fileBufferingPromise = null;
+
+    async function bufferFileToMemory(file) {
+        if (!file) return null;
+        try {
+            const buffer = await file.arrayBuffer();
+            return new File([buffer], file.name || 'paper.pdf', {
+                type: 'application/pdf',
+                lastModified: file.lastModified || Date.now()
+            });
+        } catch (err) {
+            console.warn('Memory buffering fallback:', err);
+            return file;
+        }
+    }
+
     if (uploadFile) {
         uploadFile.addEventListener('change', (e) => {
             if (e.target.files[0]) handleFileSelect(e.target.files[0]);
@@ -744,14 +761,25 @@ if (document.getElementById('uploadForm')) {
     }
 
     function handleFileSelect(file) {
-        if (file.type !== 'application/pdf') {
+        if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
             showError('fileError', 'Only PDF files are allowed');
-            uploadFile.value = ''; return;
+            uploadFile.value = '';
+            selectedUploadFile = null;
+            return;
         }
-        if (file.size > 10 * 1024 * 1024) {
-            showError('fileError', 'File size must not exceed 10MB');
-            uploadFile.value = ''; return;
+        if (file.size > 5 * 1024 * 1024) {
+            showError('fileError', 'File size must not exceed 5MB');
+            uploadFile.value = '';
+            selectedUploadFile = null;
+            return;
         }
+
+        selectedUploadFile = null;
+        fileBufferingPromise = bufferFileToMemory(file).then(buffered => {
+            selectedUploadFile = buffered;
+            return buffered;
+        });
+
         if (fileName) fileName.textContent = file.name;
         if (fileSize) fileSize.textContent = formatFileSize(file.size);
         const uploadContent = document.querySelector('.file-upload-content');
@@ -764,6 +792,8 @@ if (document.getElementById('uploadForm')) {
         removeFile.addEventListener('click', (e) => {
             e.stopPropagation();
             uploadFile.value = '';
+            selectedUploadFile = null;
+            fileBufferingPromise = null;
             const uploadContent = document.querySelector('.file-upload-content');
             if (uploadContent) uploadContent.style.display = 'block';
             if (fileSelected) fileSelected.style.display = 'none';
@@ -788,9 +818,11 @@ if (document.getElementById('uploadForm')) {
         if (el) el.style.display = 'none';
     }
 
-    uploadForm.addEventListener('submit', (e) => {
+    uploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         document.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+        const errBanner = document.getElementById('uploadErrorAlert');
+        if (errBanner) errBanner.style.display = 'none';
 
         let isValid = true;
         const deptEl = document.getElementById('uploadDepartment');
@@ -805,11 +837,95 @@ if (document.getElementById('uploadForm')) {
         if (semEl  && !semEl.value)   { showError('semesterError',   'Please select a semester');   isValid = false; }
         if (exEl   && !exEl.value)    { showError('examTypeError',   'Please select an exam type'); isValid = false; }
 
-        const file = uploadFile ? uploadFile.files[0] : null;
-        if (!file) { showError('fileError', 'Please select a PDF file'); isValid = false; }
-        else if (file.type !== 'application/pdf') { showError('fileError', 'Only PDF files are allowed'); isValid = false; }
+        if (fileBufferingPromise) {
+            try { await fileBufferingPromise; } catch (err) {}
+        }
 
-        if (isValid) uploadForm.submit();
+        let finalFile = selectedUploadFile || (uploadFile && uploadFile.files && uploadFile.files[0]);
+        if (!finalFile) {
+            showError('fileError', 'Please select a PDF file');
+            isValid = false;
+        } else if (finalFile.type !== 'application/pdf' && !finalFile.name.endsWith('.pdf')) {
+            showError('fileError', 'Only PDF files are allowed');
+            isValid = false;
+        }
+
+        if (!isValid) return;
+
+        // Ensure file is loaded into RAM memory
+        if (!selectedUploadFile && finalFile) {
+            finalFile = await bufferFileToMemory(finalFile);
+            selectedUploadFile = finalFile;
+        }
+
+        const submitBtn = uploadForm.querySelector('button[type="submit"]');
+        const originalBtnHtml = submitBtn ? submitBtn.innerHTML : 'Upload Paper';
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.style.pointerEvents = 'none';
+            submitBtn.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     style="animation: spin 0.8s linear infinite;">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83
+                             M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+                Uploading…`;
+        }
+
+        const formData = new FormData(uploadForm);
+        formData.set('file', finalFile, finalFile.name);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', uploadForm.getAttribute('action') || '/upload', true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+        const csrfEl = uploadForm.querySelector('input[name="csrf_token"]');
+        if (csrfEl && csrfEl.value) {
+            xhr.setRequestHeader('X-CSRFToken', csrfEl.value);
+        }
+
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                window.location.href = '/upload?success=1';
+            } else {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.style.pointerEvents = '';
+                    submitBtn.innerHTML = originalBtnHtml;
+                }
+                let errorMsg = 'Upload failed. Please try again.';
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data && data.error) errorMsg = data.error;
+                } catch (err) {}
+                const banner = document.getElementById('uploadErrorAlert');
+                const txt = document.getElementById('uploadErrorAlertText');
+                if (banner && txt) {
+                    txt.textContent = errorMsg;
+                    banner.style.display = 'block';
+                    banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                alert(errorMsg);
+            }
+        };
+
+        xhr.onerror = function() {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.style.pointerEvents = '';
+                submitBtn.innerHTML = originalBtnHtml;
+            }
+            const banner = document.getElementById('uploadErrorAlert');
+            const txt = document.getElementById('uploadErrorAlertText');
+            if (banner && txt) {
+                txt.textContent = 'Network connection error while uploading. Please check your connection and try again.';
+                banner.style.display = 'block';
+                banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            alert('Network connection error while uploading. Please check your connection and try again.');
+        };
+
+        xhr.send(formData);
     });
 }
 

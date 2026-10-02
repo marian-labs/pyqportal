@@ -73,46 +73,8 @@ rippleStyle.textContent = `
 `;
 document.head.appendChild(rippleStyle);
 
-/* ── Submit button: loading spinner + 5MB size guard on submit ── */
-const uploadForm = document.getElementById('uploadForm');
-if (uploadForm) {
-    uploadForm.addEventListener('submit', function (e) {
-        // Client-side 5 MB guard
-        const fileInput = this.querySelector('input[type="file"]');
-        if (fileInput && fileInput.files.length > 0) {
-            const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
-            if (fileInput.files[0].size > MAX_BYTES) {
-                e.preventDefault();
-                const errEl = document.getElementById('fileError');
-                if (errEl) {
-                    errEl.textContent = 'File is too large. Maximum PDF size is 5 MB.';
-                    errEl.style.display = 'block';
-                } else {
-                    alert('File is too large. Maximum PDF size is 5 MB.');
-                }
-                return;
-            }
-        }
+/* ── Form submission is handled by script.js with RAM buffering & AJAX ── */
 
-        const btn = this.querySelector('button[type="submit"]');
-        if (!btn) return;
-        btn.disabled = true;
-        btn.innerHTML = `
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 style="animation: spin 0.8s linear infinite;">
-                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83
-                         M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-            </svg>
-            Uploading…`;
-        /* inject spin keyframe once */
-        if (!document.getElementById('spinStyle')) {
-            const s = document.createElement('style');
-            s.id = 'spinStyle';
-            s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
-            document.head.appendChild(s);
-        }
-    });
-}
 
 /* ── Select fields: subtle flash on change ── */
 document.querySelectorAll('.form-control').forEach(el => {

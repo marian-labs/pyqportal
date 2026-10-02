@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style-combined.css') }}?v=4">
 </head>
 <body class="upload-page">
   <!-- ==================== HEADER ==================== -->
@@ -189,7 +189,7 @@
                         {% endif %}
                         {% endwith %}
 
-                        <form id="uploadForm" method="POST" action="/upload" enctype="multipart/form-data">
+                        <form id="uploadForm" method="POST" action="{{ url_for('upload_page') }}" enctype="multipart/form-data" novalidate>
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <!-- ROW 1: Department + Subject -->
                             <div class="form-row">
@@ -292,7 +292,7 @@
                                     Upload PDF File <span class="required">*</span>
                                 </label>
                                 <div class="file-upload-area" id="fileUploadArea">
-                                    <input type="file" id="uploadFile" name="file" accept=".pdf" required hidden>
+                                    <input type="file" id="uploadFile" name="file" accept=".pdf,application/pdf" style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;" />
                                     <div class="file-upload-content">
                                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -332,6 +332,11 @@
                             <!-- Immediate Duplicate Paper Warning Banner -->
                             <div id="duplicateAlert" class="error-alert" style="display:none; margin-bottom: 1.25rem; font-weight:600;">
                                 ⚠️ <span id="duplicateAlertText">Already this paper is uploaded.</span>
+                            </div>
+
+                            <!-- In-Page Upload Error Banner -->
+                            <div id="uploadErrorAlert" class="error-alert" style="display:none; margin-bottom: 1.25rem; font-weight:600;">
+                                ⚠️ <span id="uploadErrorAlertText">Upload failed. Please try again.</span>
                             </div>
 
                             <div class="form-actions">
@@ -461,8 +466,8 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script src="{{ url_for('static', filename='uploadjs.js') }}"></script>
+    <script src="{{ url_for('static', filename='script.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='uploadjs.js') }}?v=4"></script>
     <script>
         /* ── Scroll reveal ── */
         const _revealObs = new IntersectionObserver((entries) => {
@@ -536,7 +541,7 @@
             const fileUploadArea = document.getElementById('fileUploadArea');
 
             function setUploadBlocked(blocked) {
-                if (uploadFileInput) uploadFileInput.disabled = blocked;
+                // NEVER set uploadFileInput.disabled = blocked to prevent Android file descriptor revocation
                 if (fileUploadArea) {
                     if (blocked) {
                         fileUploadArea.style.pointerEvents = 'none';
